@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fredericton Airport — Daily Weather History</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --ink: #1a2330;
+    --paper: #f6f4ee;
+    --line: #d8d2c4;
+    --temp-max: #c0533e;
+    --temp-min: #2f6f8f;
+    --rain: #5b7a4a;
+    --accent: #e8a23c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  header {
+    padding: 28px 24px 18px;
+    border-bottom: 2px solid var(--ink);
+  }
+  header h1 {
+    margin: 0;
+    font-size: 1.8rem;
+    letter-spacing: 0.02em;
+  }
+  header p {
+    margin: 6px 0 0;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.85rem;
+    color: #555;
+  }
+  .station-tag {
+    display: inline-block;
+    margin-top: 10px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border: 1px solid var(--ink);
+    padding: 3px 10px;
+    border-radius: 2px;
+  }
+  main {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: end;
+    background: #fff;
+    border: 1px solid var(--line);
+    padding: 16px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: #666; }
+  input[type=number], input[type=date], input[type=file] {
+    font-family: inherit;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    font-size: 0.9rem;
+  }
+  button {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background: var(--ink);
+    color: #fff;
+    border: none;
+    padding: 9px 18px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    letter-spacing: 0.03em;
+  }
+  button:hover { background: #333; }
+  button.secondary {
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--ink);
+  }
+  .status {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.85rem;
+    color: #777;
+    margin: 4px 0 18px;
+    min-height: 1.2em;
+  }
+  .chart-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  .chart-card h2 {
+    font-size: 1rem;
+    margin: 0 0 12px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #555;
+  }
+  .stats-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.85rem;
+    margin-top: 10px;
+    color: #444;
+  }
+  .stats-row strong { color: var(--ink); }
+  .divider-note {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.78rem;
+    color: #888;
+    line-height: 1.5;
+    border-left: 3px solid var(--accent);
+    padding-left: 10px;
+    margin-bottom: 20px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Daily Weather History</h1>
+  <p>Max / min temperature and precipitation</p>
+  <span class="station-tag">Fredericton Airport · Station ID 6157</span>
+</header>
+
+<main>
+  <div class="divider-note">
+    Environment and Climate Change Canada blocks direct browser fetches from most sites (CORS),
+    so the auto-fetch button below may fail depending on where this page is hosted.
+    If it does, download the CSV yourself from
+    <a href="https://climate.weather.gc.ca/climate_data/daily_data_e.html?StationID=6157" target="_blank">climate.weather.gc.ca</a>
+    (Daily Data → Download Data) and load it with "Load CSV file" instead.
+  </div>
+
+  <div class="controls">
+    <div class="field">
+      <label for="year">Year</label>
+      <input type="number" id="year" value="2025" min="1950" max="2026" style="width:90px">
+    </div>
+    <div class="field">
+      <label for="month">Month</label>
+      <input type="number" id="month" value="6" min="1" max="12" style="width:70px">
+    </div>
+    <button id="fetchBtn">Try fetch from ECCC</button>
+    <div class="field">
+      <label for="fileInput">Or load CSV file</label>
+      <input type="file" id="fileInput" accept=".csv">
+    </div>
+  </div>
+  <div class="status" id="status"></div>
+
+  <div class="chart-card">
+    <h2>Temperature (°C)</h2>
+    <canvas id="tempChart" height="260"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Precipitation (mm)</h2>
+    <canvas id="precipChart" height="220"></canvas>
+    <div class="stats-row" id="stats"></div>
+  </div>
+</main>
+
+<script>
+let tempChart, precipChart;
+
+function renderData(rows) {
+  rows.sort((a,b) => a.date.localeCompare(b.date));
+  const labels = rows.map(r => r.date);
+  const maxT = rows.map(r => r.max);
+  const minT = rows.map(r => r.min);
+  const precip = rows.map(r => r.precip);
+
+  if (tempChart) tempChart.destroy();
+  if (precipChart) precipChart.destroy();
+
+  tempChart = new Chart(document.getElementById('tempChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Max Temp (°C)', data: maxT, borderColor: '#c0533e', backgroundColor: 'transparent', tension: 0.2, pointRadius: 1 },
+        { label: 'Min Temp (°C)', data: minT, borderColor: '#2f6f8f', backgroundColor: 'transparent', tension: 0.2, pointRadius: 1 }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      scales: { y: { title: { display: true, text: '°C' } } }
+    }
+  });
+
+  precipChart = new Chart(document.getElementById('precipChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Precipitation (mm)', data: precip, backgroundColor: '#5b7a4a' }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: { y: { title: { display: true, text: 'mm' }, beginAtZero: true } }
+    }
+  });
+
+  const total = precip.reduce((a,b) => a + (isFinite(b) ? b : 0), 0);
+  const validMax = maxT.filter(isFinite);
+  const validMin = minT.filter(isFinite);
+
+  const statsEl = document.getElementById('stats');
+  statsEl.textContent = '';
+
+  const items = [
+    ['Days', rows.length],
+    ['Total precip', `${total.toFixed(1)} mm`],
+    ['Highest max temp', `${validMax.length ? Math.max(...validMax).toFixed(1) : '—'} °C`],
+    ['Lowest min temp', `${validMin.length ? Math.min(...validMin).toFixed(1) : '—'} °C`],
+  ];
+
+  for (const [label, value] of items) {
+    const div = document.createElement('div');
+    const strong = document.createElement('strong');
+    strong.textContent = value;
+    div.textContent = `${label}: `;
+    div.appendChild(strong);
+    statsEl.appendChild(div);
+  }
+}
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length);
+  const header = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+
+  const dateIdx = header.findIndex(h => /date\/time|date$/i.test(h));
+  const maxIdx = header.findIndex(h => /max temp/i.test(h));
+  const minIdx = header.findIndex(h => /min temp/i.test(h));
+  const precipIdx = header.findIndex(h => /total precip/i.test(h));
+
+  if (dateIdx === -1 || maxIdx === -1 || minIdx === -1) {
+    throw new Error('Could not find expected columns (Date, Max Temp, Min Temp) in CSV header.');
+  }
+
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.replace(/"/g,'').trim());
+    if (cols.length < header.length) continue;
+    const date = cols[dateIdx];
+    const max = parseFloat(cols[maxIdx]);
+    const min = parseFloat(cols[minIdx]);
+    const precip = precipIdx !== -1 ? parseFloat(cols[precipIdx]) : NaN;
+    if (!date) continue;
+    rows.push({
+      date,
+      max: isFinite(max) ? max : null,
+      min: isFinite(min) ? min : null,
+      precip: isFinite(precip) ? precip : 0
+    });
+  }
+  return rows;
+}
+
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('status');
+  status.textContent = 'Reading ' + file.name + ' …';
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const rows = parseCSV(ev.target.result);
+      if (!rows.length) throw new Error('No data rows found.');
+      renderData(rows);
+      status.textContent = `Loaded ${rows.length} days from ${file.name}.`;
+    } catch (err) {
+      status.textContent = 'Error: ' + err.message;
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById('fetchBtn').addEventListener('click', async () => {
+  const year = document.getElementById('year').value;
+  const month = document.getElementById('month').value;
+  const status = document.getElementById('status');
+  status.textContent = 'Fetching from climate.weather.gc.ca …';
+
+  const targetUrl = `https://climate.weather.gc.ca/climate_data/bulk_data_e.html?format=csv&stationID=6157&Year=${year}&Month=${month}&Day=1&timeframe=2&submit=Download+Data`;
+  const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
+
+  try {
+    const resp = await fetch(proxyUrl);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const text = await resp.text();
+    const rows = parseCSV(text);
+    if (!rows.length) throw new Error('No rows returned for that month.');
+    renderData(rows);
+    status.textContent = `Loaded ${rows.length} days for ${year}-${String(month).padStart(2,'0')}.`;
+  } catch (err) {
+    status.textContent = 'Fetch failed (likely CORS) — ' + err.message + '. Use "Load CSV file" instead.';
+  }
+});
+</script>
+</body>
+</html>
