@@ -152,8 +152,14 @@
 
   <div class="controls">
     <div class="field">
-      <label for="year">Year</label>
-      <input type="number" id="year" value="2025" min="1950" max="2026" style="width:90px">
+      <label for="localYear">Saved data — year</label>
+      <input type="number" id="localYear" value="2025" min="1950" max="2030" style="width:90px">
+    </div>
+    <button id="localBtn">Load saved data</button>
+    <div style="width:1px;background:var(--line);align-self:stretch;margin:0 4px"></div>
+    <div class="field">
+      <label for="year">Live fetch — year</label>
+      <input type="number" id="year" value="2025" min="1950" max="2030" style="width:90px">
     </div>
     <div class="field">
       <label for="month">Month</label>
@@ -296,6 +302,23 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
     e.target.value = '';
   };
   reader.readAsText(file);
+});
+
+document.getElementById('localBtn').addEventListener('click', async () => {
+  const year = document.getElementById('localYear').value;
+  const status = document.getElementById('status');
+  status.textContent = `Loading saved data for ${year} …`;
+  try {
+    const resp = await fetch(`data/weather-6157-${year}.csv`);
+    if (!resp.ok) throw new Error(`No saved data found for ${year} — run the GitHub Action to fetch it.`);
+    const text = await resp.text();
+    const rows = parseCSV(text);
+    if (!rows.length) throw new Error('File was empty or could not be parsed.');
+    renderData(rows);
+    status.textContent = `Loaded ${rows.length} days of saved data for ${year}.`;
+  } catch (err) {
+    status.textContent = 'Error: ' + err.message;
+  }
 });
 
 document.getElementById('fetchBtn').addEventListener('click', async () => {
