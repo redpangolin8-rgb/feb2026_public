@@ -309,8 +309,7 @@ document.getElementById('localBtn').addEventListener('click', async () => {
   const status = document.getElementById('status');
   status.textContent = `Loading saved data for ${year} …`;
   try {
-    const station = 50089;
-    const resp = await fetch(`data/weather-${station}-${year}.csv`);
+    const resp = await fetch(`data/weather-6157-${year}.csv`);
     if (!resp.ok) throw new Error(`No saved data found for ${year} — run the GitHub Action to fetch it.`);
     const text = await resp.text();
     const rows = parseCSV(text);
