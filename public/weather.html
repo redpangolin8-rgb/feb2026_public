@@ -122,15 +122,6 @@
     color: #444;
   }
   .stats-row strong { color: var(--ink); }
-  .divider-note {
-    font-family: 'Helvetica Neue', Arial, sans-serif;
-    font-size: 0.78rem;
-    color: #888;
-    line-height: 1.5;
-    border-left: 3px solid var(--accent);
-    padding-left: 10px;
-    margin-bottom: 20px;
-  }
 </style>
 </head>
 <body>
@@ -142,30 +133,24 @@
 </header>
 
 <main>
-  <div class="divider-note">
-    Environment and Climate Change Canada blocks direct browser fetches from most sites (CORS),
-    so the auto-fetch button below may fail depending on where this page is hosted.
-    If it does, download the CSV yourself from
-    <a href="https://climate.weather.gc.ca/climate_data/daily_data_e.html?StationID=6157" target="_blank">climate.weather.gc.ca</a>
-    (Daily Data → Download Data) and load it with "Load CSV file" instead.
-  </div>
-
   <div class="controls">
     <div class="field">
-      <label for="localYear">Saved data — year</label>
-      <input type="number" id="localYear" value="2025" min="1950" max="2030" style="width:90px">
+      <label for="localYear">Year</label>
+      <div style="display:flex;gap:4px;align-items:center">
+        <button id="yearPrev" class="secondary" style="padding:6px 10px;font-size:1rem">&#8249;</button>
+        <input type="number" id="localYear" value="2025" min="1980" max="2030" style="width:80px">
+        <button id="yearNext" class="secondary" style="padding:6px 10px;font-size:1rem">&#8250;</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="stationSelect">Station</label>
+      <select id="stationSelect" style="font-family:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:3px;font-size:0.9rem;">
+        <option value="auto">Auto</option>
+        <option value="6157">6157 (2000–2009)</option>
+        <option value="48568">48568 (2010–present)</option>
+      </select>
     </div>
     <button id="localBtn">Load saved data</button>
-    <div style="width:1px;background:var(--line);align-self:stretch;margin:0 4px"></div>
-    <div class="field">
-      <label for="year">Live fetch — year</label>
-      <input type="number" id="year" value="2025" min="1950" max="2030" style="width:90px">
-    </div>
-    <div class="field">
-      <label for="month">Month</label>
-      <input type="number" id="month" value="6" min="1" max="12" style="width:70px">
-    </div>
-    <button id="fetchBtn">Try fetch from ECCC</button>
     <div class="field">
       <label for="fileInput">Or load CSV file</label>
       <input type="file" id="fileInput" accept=".csv">
@@ -304,44 +289,40 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
   reader.readAsText(file);
 });
 
-document.getElementById('localBtn').addEventListener('click', async () => {
-  const year = document.getElementById('localYear').value;
+function stationForYear(year) {
+  const sel = document.getElementById('stationSelect').value;
+  if (sel !== 'auto') return sel;
+  return parseInt(year) < 2010 ? '6157' : '48568';
+}
+
+async function loadYear(year) {
+  const station = stationForYear(year);
   const status = document.getElementById('status');
-  status.textContent = `Loading saved data for ${year} …`;
+  status.textContent = `Loading ${year} (station ${station}) …`;
   try {
-    const resp = await fetch(`data/weather-6157-${year}.csv`);
-    if (!resp.ok) throw new Error(`No saved data found for ${year} — run the GitHub Action to fetch it.`);
+    const resp = await fetch(`data/weather-${station}-${year}.csv`);
+    if (!resp.ok) throw new Error(`No saved data found for ${year} on station ${station} — run the GitHub Action to fetch it.`);
     const text = await resp.text();
     const rows = parseCSV(text);
     if (!rows.length) throw new Error('File was empty or could not be parsed.');
     renderData(rows);
-    status.textContent = `Loaded ${rows.length} days of saved data for ${year}.`;
+    status.textContent = `Loaded ${rows.length} days for ${year} (station ${station}).`;
   } catch (err) {
     status.textContent = 'Error: ' + err.message;
   }
+}
+
+document.getElementById('yearPrev').addEventListener('click', () => {
+  const el = document.getElementById('localYear');
+  if (parseInt(el.value) > parseInt(el.min)) { el.value = parseInt(el.value) - 1; loadYear(el.value); }
 });
-
-document.getElementById('fetchBtn').addEventListener('click', async () => {
-  const year = document.getElementById('year').value;
-  const month = document.getElementById('month').value;
-  const status = document.getElementById('status');
-  status.textContent = 'Fetching from climate.weather.gc.ca …';
-
-  const targetUrl = `https://climate.weather.gc.ca/climate_data/bulk_data_e.html?format=csv&stationID=6157&Year=${year}&Month=${month}&Day=1&timeframe=2&submit=Download+Data`;
-  const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
-
-  try {
-    const resp = await fetch(proxyUrl);
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const text = await resp.text();
-    const rows = parseCSV(text);
-    if (!rows.length) throw new Error('No rows returned for that month.');
-    renderData(rows);
-    status.textContent = `Loaded ${rows.length} days for ${year}-${String(month).padStart(2,'0')}.`;
-  } catch (err) {
-    status.textContent = 'Fetch failed (likely CORS) — ' + err.message + '. Use "Load CSV file" instead.';
-  }
+document.getElementById('yearNext').addEventListener('click', () => {
+  const el = document.getElementById('localYear');
+  if (parseInt(el.value) < parseInt(el.max)) { el.value = parseInt(el.value) + 1; loadYear(el.value); }
 });
+document.getElementById('localYear').addEventListener('change', (e) => loadYear(e.target.value));
+document.getElementById('localBtn').addEventListener('click', () => loadYear(document.getElementById('localYear').value));
+
 </script>
 </body>
 </html>
