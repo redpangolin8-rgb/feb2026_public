@@ -199,17 +199,28 @@ function renderData(rows) {
     }
   });
 
+  const rolling3 = precip.map((_, i) => {
+    if (i < 2) return null;
+    const vals = [precip[i-2], precip[i-1], precip[i]];
+    return vals.every(v => v !== null && isFinite(v)) ? vals.reduce((a,b) => a+b, 0) : null;
+  });
+
   precipChart = new Chart(document.getElementById('precipChart'), {
     type: 'bar',
     data: {
       labels,
       datasets: [
-        { label: 'Precipitation (mm)', data: precip, backgroundColor: '#5b7a4a' }
+        { label: 'Daily (mm)', data: precip, backgroundColor: '#5b7a4a', yAxisID: 'y' },
+        { label: '3-day total (mm)', type: 'line', data: rolling3, borderColor: '#e8a23c', backgroundColor: 'transparent', tension: 0.2, pointRadius: 0, yAxisID: 'y2' }
       ]
     },
     options: {
       responsive: true,
-      scales: { y: { title: { display: true, text: 'mm' }, beginAtZero: true } }
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        y:  { position: 'left',  title: { display: true, text: 'Daily (mm)' },      beginAtZero: true },
+        y2: { position: 'right', title: { display: true, text: '3-day total (mm)' }, beginAtZero: true, grid: { drawOnChartArea: false } }
+      }
     }
   });
 
