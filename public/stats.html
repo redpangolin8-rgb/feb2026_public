@@ -96,7 +96,7 @@
 
 <header>
   <h1>Climate Statistics</h1>
-  <p>Daily climatological mean ± 1σ and 2σ · 1951–2026</p>
+  <p>Daily climatological mean ± 1σ and 2σ · ±7-day window · 1951–2026</p>
   <span class="station-tag">Fredericton Airport · Stations 6157 / 48568</span>
   <nav><a href="weather.html">← Daily weather history</a></nav>
 </header>
@@ -198,17 +198,25 @@ function stats(values) {
   return { mean, std };
 }
 
+const WINDOW = 7;
+
 function renderChart(byMMDD, variable) {
   const means  = [], u1 = [], l1 = [], u2 = [], l2 = [];
+  const n = DAY_KEYS.length;
 
-  for (const key of DAY_KEYS) {
-    const { mean, std } = stats(byMMDD[key]?.[variable]);
+  for (let i = 0; i < n; i++) {
+    const windowVals = [];
+    for (let offset = -WINDOW; offset <= WINDOW; offset++) {
+      const idx = ((i + offset) % n + n) % n;
+      windowVals.push(...(byMMDD[DAY_KEYS[idx]]?.[variable] ?? []));
+    }
+    const { mean, std } = stats(windowVals);
     const fmt = v => v !== null ? +v.toFixed(2) : null;
     means.push(fmt(mean));
-    u1.push(fmt(mean !== null ? mean + std       : null));
-    l1.push(fmt(mean !== null ? mean - std       : null));
-    u2.push(fmt(mean !== null ? mean + 2 * std   : null));
-    l2.push(fmt(mean !== null ? mean - 2 * std   : null));
+    u1.push(fmt(mean !== null ? mean + std     : null));
+    l1.push(fmt(mean !== null ? mean - std     : null));
+    u2.push(fmt(mean !== null ? mean + 2 * std : null));
+    l2.push(fmt(mean !== null ? mean - 2 * std : null));
   }
 
   const varLabel = { max: 'Max Temp (°C)', min: 'Min Temp (°C)', mean: 'Mean Temp (°C)' }[variable];
