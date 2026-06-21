@@ -49,7 +49,7 @@
 
 <header>
   <h1>Climate Anomalies</h1>
-  <p>Days per year exceeding the ±7-day windowed climatological mean+1σ and mean+2σ thresholds · 1951–2026</p>
+  <p>Days per year exceeding the ±7-day windowed climatological mean+1σ and mean+2σ thresholds · 1951–<span id="endYear"></span></p>
   <span class="station-tag">Fredericton Airport · Stations 6157 / 48568</span>
   <nav>
     <a href="index.html">← Home</a>
@@ -71,7 +71,9 @@
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTH_DAYS  = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 const WINDOW = 7;
-const YEARS  = Array.from({length: 2026 - 1951 + 1}, (_, i) => 1951 + i);
+const END_YEAR = new Date().getFullYear();
+document.getElementById('endYear').textContent = END_YEAR;
+const YEARS  = Array.from({length: END_YEAR - 1951 + 1}, (_, i) => 1951 + i);
 
 function buildDayKeys() {
   const keys = [];

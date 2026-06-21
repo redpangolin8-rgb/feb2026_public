@@ -104,7 +104,7 @@
 
 <header>
   <h1>Fredericton Airport</h1>
-  <p>Historical daily weather data and climate analysis · 1951–2026</p>
+  <p>Historical daily weather data and climate analysis · 1951–<span id="endYear"></span></p>
   <span class="station-tag">Stations 6157 / 48568 · ECCC</span>
 </header>
 
@@ -132,8 +132,13 @@
 </main>
 
 <footer>
-  Data source: Environment and Climate Change Canada (ECCC) · Station 6157 (1951–2010) and 48568 (2010–2026)
+  Data source: Environment and Climate Change Canada (ECCC) · Station 6157 (1951–2010) and 48568 (2010–<span id="endYearFooter"></span>)
 </footer>
 
+<script>
+  const y = new Date().getFullYear();
+  document.getElementById('endYear').textContent = y;
+  document.getElementById('endYearFooter').textContent = y;
+</script>
 </body>
 </html>
