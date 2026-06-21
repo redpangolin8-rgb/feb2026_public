@@ -49,7 +49,7 @@
 
 <header>
   <h1>Climate Anomalies</h1>
-  <p>Days per year exceeding the ±7-day windowed climatological threshold · 1951–2026</p>
+  <p>Days per year exceeding the ±7-day windowed climatological mean+1σ and mean+2σ thresholds · 1951–2026</p>
   <span class="station-tag">Fredericton Airport · Stations 6157 / 48568</span>
   <nav>
     <a href="index.html">← Home</a>
@@ -62,7 +62,7 @@
   <div class="status" id="status">Loading data…</div>
 
   <div class="chart-card">
-    <h2>Days per year with daily max temp above mean + 1σ</h2>
+    <h2>Days per year with daily max temp above mean + 1σ and mean + 2σ</h2>
     <canvas id="anomCountChart" height="260"></canvas>
   </div>
 </main>
@@ -142,9 +142,8 @@ function stats(values) {
 }
 
 function buildThresholds(byMMDD) {
-  // For each calendar day, compute mean + 1σ using the ±WINDOW day pool
   const n = DAY_KEYS.length;
-  const thresholds = {};
+  const thresh1 = {}, thresh2 = {};
   for (let i = 0; i < n; i++) {
     const vals = [];
     for (let o = -WINDOW; o <= WINDOW; o++) {
@@ -152,9 +151,10 @@ function buildThresholds(byMMDD) {
       vals.push(...(byMMDD[DAY_KEYS[idx]] ?? []));
     }
     const { mean, std } = stats(vals);
-    thresholds[DAY_KEYS[i]] = mean !== null ? mean + std : null;
+    thresh1[DAY_KEYS[i]] = mean !== null ? mean + std       : null;
+    thresh2[DAY_KEYS[i]] = mean !== null ? mean + 2 * std   : null;
   }
-  return thresholds;
+  return { thresh1, thresh2 };
 }
 
 function countAnomalyDays(byYear, thresholds) {
@@ -163,8 +163,8 @@ function countAnomalyDays(byYear, thresholds) {
     if (!days) return null;
     let count = 0;
     for (const [mmdd, maxTemp] of Object.entries(days)) {
-      const threshold = thresholds[mmdd];
-      if (threshold !== null && maxTemp > threshold) count++;
+      const t = thresholds[mmdd];
+      if (t !== null && maxTemp > t) count++;
     }
     return count;
   });
@@ -172,11 +172,13 @@ function countAnomalyDays(byYear, thresholds) {
 
 (async () => {
   const { byMMDD, byYear } = await loadAll();
-  const thresholds = buildThresholds(byMMDD);
-  const counts     = countAnomalyDays(byYear, thresholds);
+  const { thresh1, thresh2 } = buildThresholds(byMMDD);
+  const counts1 = countAnomalyDays(byYear, thresh1);
+  const counts2 = countAnomalyDays(byYear, thresh2);
 
-  // Expected count under normality: ~15.9% of days per year
-  const expectedLine = YEARS.map(() => +(365 * 0.1587).toFixed(1));
+  // Expected counts under normality
+  const expected1 = YEARS.map(() => +(365 * 0.1587).toFixed(1)); // ~58 days (>mean+1σ)
+  const expected2 = YEARS.map(() => +(365 * 0.0228).toFixed(1)); // ~8 days  (>mean+2σ)
 
   new Chart(document.getElementById('anomCountChart'), {
     type: 'bar',
@@ -185,14 +187,31 @@ function countAnomalyDays(byYear, thresholds) {
       datasets: [
         {
           label: 'Days above mean + 1σ',
-          data: counts,
-          backgroundColor: 'rgba(192,83,62,0.7)',
+          data: counts1,
+          backgroundColor: 'rgba(192,83,62,0.55)',
           borderColor: 'rgba(192,83,62,1)',
           borderWidth: 1,
         },
         {
-          label: 'Expected (~58 days)',
-          data: expectedLine,
+          label: 'Days above mean + 2σ',
+          data: counts2,
+          backgroundColor: 'rgba(26,35,48,0.6)',
+          borderColor: 'rgba(26,35,48,1)',
+          borderWidth: 1,
+        },
+        {
+          label: 'Expected >1σ (~58 days)',
+          data: expected1,
+          type: 'line',
+          borderColor: 'rgba(192,83,62,0.6)',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          borderDash: [5, 4],
+          pointRadius: 0,
+        },
+        {
+          label: 'Expected >2σ (~8 days)',
+          data: expected2,
           type: 'line',
           borderColor: 'rgba(26,35,48,0.4)',
           backgroundColor: 'transparent',
