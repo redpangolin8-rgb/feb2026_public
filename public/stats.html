@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fredericton Airport — Climate Statistics</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --ink: #1a2330;
+    --paper: #f6f4ee;
+    --line: #d8d2c4;
+    --accent: #e8a23c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  header {
+    padding: 28px 24px 18px;
+    border-bottom: 2px solid var(--ink);
+  }
+  header h1 { margin: 0; font-size: 1.8rem; letter-spacing: 0.02em; }
+  header p {
+    margin: 6px 0 0;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.85rem;
+    color: #555;
+  }
+  header nav {
+    margin-top: 10px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.8rem;
+  }
+  header nav a { color: var(--ink); }
+  .station-tag {
+    display: inline-block;
+    margin-top: 10px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border: 1px solid var(--ink);
+    padding: 3px 10px;
+    border-radius: 2px;
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px; }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: end;
+    background: #fff;
+    border: 1px solid var(--line);
+    padding: 16px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: #666; }
+  select {
+    font-family: inherit;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    font-size: 0.9rem;
+  }
+  .status {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.85rem;
+    color: #777;
+    margin: 4px 0 18px;
+    min-height: 1.2em;
+  }
+  .chart-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  .chart-card h2 {
+    font-size: 1rem;
+    margin: 0 0 12px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #555;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Climate Statistics</h1>
+  <p>Daily climatological mean ± 1σ and 2σ · 1951–2026</p>
+  <span class="station-tag">Fredericton Airport · Stations 6157 / 48568</span>
+  <nav><a href="weather.html">← Daily weather history</a></nav>
+</header>
+
+<main>
+  <div class="controls">
+    <div class="field">
+      <label for="varSelect">Variable</label>
+      <select id="varSelect">
+        <option value="max">Max Temp (°C)</option>
+        <option value="min">Min Temp (°C)</option>
+        <option value="mean">Mean Temp (°C)</option>
+      </select>
+    </div>
+  </div>
+  <div class="status" id="status">Loading data…</div>
+  <div class="chart-card">
+    <h2 id="chartTitle">Daily climatology</h2>
+    <canvas id="climChart" height="320"></canvas>
+  </div>
+</main>
+
+<script>
+let climChart = null;
+let aggregated = null;
+
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_DAYS  = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+function buildDayKeys() {
+  const keys = [];
+  for (let m = 0; m < 12; m++) {
+    for (let d = 1; d <= MONTH_DAYS[m]; d++) {
+      keys.push(`${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
+    }
+  }
+  return keys;
+}
+
+const DAY_KEYS = buildDayKeys();
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const header = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+  const dateIdx = header.findIndex(h => /date\/time|date$/i.test(h));
+  const maxIdx  = header.findIndex(h => /max temp/i.test(h));
+  const minIdx  = header.findIndex(h => /min temp/i.test(h));
+  if (dateIdx === -1 || maxIdx === -1 || minIdx === -1) return [];
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.replace(/"/g,'').trim());
+    if (cols.length < header.length) continue;
+    const date = cols[dateIdx];
+    const max  = parseFloat(cols[maxIdx]);
+    const min  = parseFloat(cols[minIdx]);
+    if (!date) continue;
+    rows.push({
+      date,
+      max: isFinite(max) ? max : null,
+      min: isFinite(min) ? min : null,
+    });
+  }
+  return rows;
+}
+
+async function loadAll() {
+  const years = Array.from({length: 2026 - 1951 + 1}, (_, i) => 1951 + i);
+  document.getElementById('status').textContent = `Loading ${years.length} data files…`;
+
+  const texts = await Promise.all(years.map(year => {
+    const station = year < 2010 ? 6157 : 48568;
+    return fetch(`data/weather-${station}-${year}.csv`)
+      .then(r => r.ok ? r.text() : null)
+      .catch(() => null);
+  }));
+
+  const byMMDD = {};
+  let loaded = 0;
+  for (const text of texts) {
+    if (!text) continue;
+    loaded++;
+    for (const row of parseCSV(text)) {
+      const key = row.date.slice(5);
+      if (!byMMDD[key]) byMMDD[key] = { max: [], min: [], mean: [] };
+      if (row.max !== null) byMMDD[key].max.push(row.max);
+      if (row.min !== null) byMMDD[key].min.push(row.min);
+      if (row.max !== null && row.min !== null) byMMDD[key].mean.push((row.max + row.min) / 2);
+    }
+  }
+  document.getElementById('status').textContent = `Loaded ${loaded} years of data.`;
+  return byMMDD;
+}
+
+function stats(values) {
+  if (!values || values.length < 2) return { mean: null, std: null };
+  const n    = values.length;
+  const mean = values.reduce((a, b) => a + b, 0) / n;
+  const std  = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1));
+  return { mean, std };
+}
+
+function renderChart(byMMDD, variable) {
+  const means  = [], u1 = [], l1 = [], u2 = [], l2 = [];
+
+  for (const key of DAY_KEYS) {
+    const { mean, std } = stats(byMMDD[key]?.[variable]);
+    const fmt = v => v !== null ? +v.toFixed(2) : null;
+    means.push(fmt(mean));
+    u1.push(fmt(mean !== null ? mean + std       : null));
+    l1.push(fmt(mean !== null ? mean - std       : null));
+    u2.push(fmt(mean !== null ? mean + 2 * std   : null));
+    l2.push(fmt(mean !== null ? mean - 2 * std   : null));
+  }
+
+  const varLabel = { max: 'Max Temp (°C)', min: 'Min Temp (°C)', mean: 'Mean Temp (°C)' }[variable];
+  const rgb      = { max: '192,83,62',     min: '47,111,143',    mean: '91,122,74'       }[variable];
+
+  document.getElementById('chartTitle').textContent = `Daily climatology — ${varLabel}`;
+
+  if (climChart) climChart.destroy();
+
+  climChart = new Chart(document.getElementById('climChart'), {
+    type: 'line',
+    data: {
+      labels: DAY_KEYS,
+      datasets: [
+        {
+          label: '±2σ',
+          data: u2,
+          borderColor: 'transparent',
+          backgroundColor: `rgba(${rgb},0.12)`,
+          fill: '+1',
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: '_lower2',
+          data: l2,
+          borderColor: 'transparent',
+          backgroundColor: 'transparent',
+          fill: false,
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: '±1σ',
+          data: u1,
+          borderColor: 'transparent',
+          backgroundColor: `rgba(${rgb},0.22)`,
+          fill: '+1',
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: '_lower1',
+          data: l1,
+          borderColor: 'transparent',
+          backgroundColor: 'transparent',
+          fill: false,
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: 'Mean',
+          data: means,
+          borderColor: `rgba(${rgb},1)`,
+          backgroundColor: 'transparent',
+          fill: false,
+          pointRadius: 0,
+          tension: 0.3,
+          borderWidth: 2,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: {
+            filter: item => !item.text.startsWith('_'),
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            autoSkip: false,
+            maxRotation: 0,
+            callback: (_, i) => DAY_KEYS[i]?.endsWith('-01')
+              ? MONTH_NAMES[parseInt(DAY_KEYS[i]) - 1]
+              : '',
+          }
+        },
+        y: {
+          title: { display: true, text: varLabel }
+        }
+      }
+    }
+  });
+}
+
+(async () => {
+  aggregated = await loadAll();
+  renderChart(aggregated, document.getElementById('varSelect').value);
+})();
+
+document.getElementById('varSelect').addEventListener('change', e => {
+  if (aggregated) renderChart(aggregated, e.target.value);
+});
+</script>
+</body>
+</html>
