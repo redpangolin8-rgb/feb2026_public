@@ -49,7 +49,7 @@
 
 <header>
   <h1>Climate Anomalies</h1>
-  <p>Days per year exceeding the ±7-day windowed climatological mean+1σ and mean+2σ thresholds · 1951–<span id="endYear"></span></p>
+  <p>Days per year outside the ±7-day windowed climatological mean±1σ and mean±2σ thresholds · 1951–<span id="endYear"></span></p>
   <span class="station-tag">Fredericton Airport · Stations 6157 / 48568</span>
   <nav>
     <a href="index.html">← Home</a>
@@ -63,7 +63,12 @@
 
   <div class="chart-card">
     <h2>Days per year with daily max temp above mean + 1σ and mean + 2σ</h2>
-    <canvas id="anomCountChart" height="260"></canvas>
+    <canvas id="maxAnomaliesChart" height="260"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Days per year with daily min temp below mean − 1σ and mean − 2σ</h2>
+    <canvas id="minAnomaliesChart" height="260"></canvas>
   </div>
 </main>
 
@@ -89,15 +94,21 @@ function parseCSV(text) {
   const header = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
   const dateIdx = header.findIndex(h => /date\/time|date$/i.test(h));
   const maxIdx  = header.findIndex(h => /max temp/i.test(h));
-  if (dateIdx === -1 || maxIdx === -1) return [];
+  const minIdx  = header.findIndex(h => /min temp/i.test(h));
+  if (dateIdx === -1 || maxIdx === -1 || minIdx === -1) return [];
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(',').map(c => c.replace(/"/g,'').trim());
     if (cols.length < header.length) continue;
     const date = cols[dateIdx];
     const max  = parseFloat(cols[maxIdx]);
+    const min  = parseFloat(cols[minIdx]);
     if (!date) continue;
-    rows.push({ date, max: isFinite(max) ? max : null });
+    rows.push({
+      date,
+      max: isFinite(max) ? max : null,
+      min: isFinite(min) ? min : null,
+    });
   }
   return rows;
 }
@@ -110,10 +121,8 @@ async function loadAll() {
       .then(r => r.ok ? r.text() : null).catch(() => null);
   }));
 
-  // byMMDD: climatological values pooled by calendar day
-  const byMMDD = {};
-  // byYear: actual observations keyed by year then MM-DD
-  const byYear = {};
+  const byMMDD = {};  // climatological pools: { [mmdd]: { max: [], min: [] } }
+  const byYear = {};  // observations: { [year]: { max: { [mmdd]: val }, min: { [mmdd]: val } } }
 
   let loaded = 0;
   for (let yi = 0; yi < YEARS.length; yi++) {
@@ -121,14 +130,12 @@ async function loadAll() {
     if (!text) continue;
     loaded++;
     const year = YEARS[yi];
-    byYear[year] = {};
+    byYear[year] = { max: {}, min: {} };
     for (const row of parseCSV(text)) {
       const mmdd = row.date.slice(5);
-      if (!byMMDD[mmdd]) byMMDD[mmdd] = [];
-      if (row.max !== null) {
-        byMMDD[mmdd].push(row.max);
-        byYear[year][mmdd] = row.max;
-      }
+      if (!byMMDD[mmdd]) byMMDD[mmdd] = { max: [], min: [] };
+      if (row.max !== null) { byMMDD[mmdd].max.push(row.max); byYear[year].max[mmdd] = row.max; }
+      if (row.min !== null) { byMMDD[mmdd].min.push(row.min); byYear[year].min[mmdd] = row.min; }
     }
   }
   document.getElementById('status').textContent = `Loaded ${loaded} years of data.`;
@@ -143,100 +150,81 @@ function stats(values) {
   return { mean, std };
 }
 
-function buildThresholds(byMMDD) {
+function buildThresholds(byMMDD, variable, direction) {
+  // direction: +1 → upper thresholds (mean+σ), -1 → lower thresholds (mean-σ)
   const n = DAY_KEYS.length;
   const thresh1 = {}, thresh2 = {};
   for (let i = 0; i < n; i++) {
     const vals = [];
     for (let o = -WINDOW; o <= WINDOW; o++) {
       const idx = ((i + o) % n + n) % n;
-      vals.push(...(byMMDD[DAY_KEYS[idx]] ?? []));
+      vals.push(...(byMMDD[DAY_KEYS[idx]]?.[variable] ?? []));
     }
     const { mean, std } = stats(vals);
-    thresh1[DAY_KEYS[i]] = mean !== null ? mean + std       : null;
-    thresh2[DAY_KEYS[i]] = mean !== null ? mean + 2 * std   : null;
+    thresh1[DAY_KEYS[i]] = mean !== null ? mean + direction * std       : null;
+    thresh2[DAY_KEYS[i]] = mean !== null ? mean + direction * 2 * std   : null;
   }
   return { thresh1, thresh2 };
 }
 
-function countAnomalyDays(byYear, thresholds) {
+function countDays(byYear, variable, thresholds, exceedsFn) {
   return YEARS.map(year => {
-    const days = byYear[year];
-    if (!days) return null;
+    const obs = byYear[year]?.[variable];
+    if (!obs) return null;
     let count = 0;
-    for (const [mmdd, maxTemp] of Object.entries(days)) {
+    for (const [mmdd, val] of Object.entries(obs)) {
       const t = thresholds[mmdd];
-      if (t !== null && maxTemp > t) count++;
+      if (t !== null && exceedsFn(val, t)) count++;
     }
     return count;
   });
 }
 
-(async () => {
-  const { byMMDD, byYear } = await loadAll();
-  const { thresh1, thresh2 } = buildThresholds(byMMDD);
-  const counts1 = countAnomalyDays(byYear, thresh1);
-  const counts2 = countAnomalyDays(byYear, thresh2);
-
-  // Expected counts under normality
-  const expected1 = YEARS.map(() => +(365 * 0.1587).toFixed(1)); // ~58 days (>mean+1σ)
-  const expected2 = YEARS.map(() => +(365 * 0.0228).toFixed(1)); // ~8 days  (>mean+2σ)
-
-  new Chart(document.getElementById('anomCountChart'), {
+function makeAnomalyChart(canvasId, datasets) {
+  return new Chart(document.getElementById(canvasId), {
     type: 'bar',
-    data: {
-      labels: YEARS,
-      datasets: [
-        {
-          label: 'Days above mean + 1σ',
-          data: counts1,
-          backgroundColor: 'rgba(192,83,62,0.55)',
-          borderColor: 'rgba(192,83,62,1)',
-          borderWidth: 1,
-        },
-        {
-          label: 'Days above mean + 2σ',
-          data: counts2,
-          backgroundColor: 'rgba(26,35,48,0.6)',
-          borderColor: 'rgba(26,35,48,1)',
-          borderWidth: 1,
-        },
-        {
-          label: 'Expected >1σ (~58 days)',
-          data: expected1,
-          type: 'line',
-          borderColor: 'rgba(192,83,62,0.6)',
-          backgroundColor: 'transparent',
-          borderWidth: 1.5,
-          borderDash: [5, 4],
-          pointRadius: 0,
-        },
-        {
-          label: 'Expected >2σ (~8 days)',
-          data: expected2,
-          type: 'line',
-          borderColor: 'rgba(26,35,48,0.4)',
-          backgroundColor: 'transparent',
-          borderWidth: 1.5,
-          borderDash: [5, 4],
-          pointRadius: 0,
-        },
-      ]
-    },
+    data: { labels: YEARS, datasets },
     options: {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
       scales: {
-        x: {
-          ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 20 }
-        },
-        y: {
-          title: { display: true, text: 'Days' },
-          beginAtZero: true,
-        }
+        x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 20 } },
+        y: { title: { display: true, text: 'Days' }, beginAtZero: true },
       }
     }
   });
+}
+
+(async () => {
+  const { byMMDD, byYear } = await loadAll();
+
+  // Max temp: days above mean+1σ / mean+2σ
+  const { thresh1: maxT1, thresh2: maxT2 } = buildThresholds(byMMDD, 'max', +1);
+  const maxCounts1 = countDays(byYear, 'max', maxT1, (v, t) => v > t);
+  const maxCounts2 = countDays(byYear, 'max', maxT2, (v, t) => v > t);
+
+  // Min temp: days below mean−1σ / mean−2σ
+  const { thresh1: minT1, thresh2: minT2 } = buildThresholds(byMMDD, 'min', -1);
+  const minCounts1 = countDays(byYear, 'min', minT1, (v, t) => v < t);
+  const minCounts2 = countDays(byYear, 'min', minT2, (v, t) => v < t);
+
+  // Expected counts under normality (symmetric)
+  const expected1 = YEARS.map(() => +(365 * 0.1587).toFixed(1)); // ~58 days
+  const expected2 = YEARS.map(() => +(365 * 0.0228).toFixed(1)); // ~8 days
+
+  makeAnomalyChart('maxAnomaliesChart', [
+    { label: 'Days above mean + 1σ', data: maxCounts1, backgroundColor: 'rgba(192,83,62,0.55)', borderColor: 'rgba(192,83,62,1)', borderWidth: 1 },
+    { label: 'Days above mean + 2σ', data: maxCounts2, backgroundColor: 'rgba(26,35,48,0.6)',   borderColor: 'rgba(26,35,48,1)',   borderWidth: 1 },
+    { label: 'Expected >1σ (~58 days)', data: expected1, type: 'line', borderColor: 'rgba(192,83,62,0.6)', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [5,4], pointRadius: 0 },
+    { label: 'Expected >2σ (~8 days)',  data: expected2, type: 'line', borderColor: 'rgba(26,35,48,0.4)',  backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [5,4], pointRadius: 0 },
+  ]);
+
+  makeAnomalyChart('minAnomaliesChart', [
+    { label: 'Days below mean − 1σ', data: minCounts1, backgroundColor: 'rgba(47,111,143,0.55)', borderColor: 'rgba(47,111,143,1)', borderWidth: 1 },
+    { label: 'Days below mean − 2σ', data: minCounts2, backgroundColor: 'rgba(26,35,48,0.6)',    borderColor: 'rgba(26,35,48,1)',    borderWidth: 1 },
+    { label: 'Expected <1σ (~58 days)', data: expected1, type: 'line', borderColor: 'rgba(47,111,143,0.6)', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [5,4], pointRadius: 0 },
+    { label: 'Expected <2σ (~8 days)',  data: expected2, type: 'line', borderColor: 'rgba(26,35,48,0.4)',   backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [5,4], pointRadius: 0 },
+  ]);
 })();
 </script>
 </body>
