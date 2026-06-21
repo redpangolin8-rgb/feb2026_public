@@ -18,77 +18,30 @@
     background: var(--paper);
     color: var(--ink);
   }
-  header {
-    padding: 28px 24px 18px;
-    border-bottom: 2px solid var(--ink);
-  }
+  header { padding: 28px 24px 18px; border-bottom: 2px solid var(--ink); }
   header h1 { margin: 0; font-size: 1.8rem; letter-spacing: 0.02em; }
-  header p {
-    margin: 6px 0 0;
-    font-family: 'Helvetica Neue', Arial, sans-serif;
-    font-size: 0.85rem;
-    color: #555;
-  }
-  header nav {
-    margin-top: 10px;
-    font-family: 'Helvetica Neue', Arial, sans-serif;
-    font-size: 0.8rem;
-  }
+  header p { margin: 6px 0 0; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem; color: #555; }
+  header nav { margin-top: 10px; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem; }
   header nav a { color: var(--ink); }
   .station-tag {
-    display: inline-block;
-    margin-top: 10px;
-    font-family: 'Helvetica Neue', Arial, sans-serif;
-    font-size: 0.75rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    border: 1px solid var(--ink);
-    padding: 3px 10px;
-    border-radius: 2px;
+    display: inline-block; margin-top: 10px;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    border: 1px solid var(--ink); padding: 3px 10px; border-radius: 2px;
   }
   main { max-width: 1000px; margin: 0 auto; padding: 24px; }
-  .controls {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-    align-items: end;
-    background: #fff;
-    border: 1px solid var(--line);
-    padding: 16px;
-    border-radius: 4px;
-    margin-bottom: 20px;
-    font-family: 'Helvetica Neue', Arial, sans-serif;
-  }
-  .field { display: flex; flex-direction: column; gap: 4px; }
-  .field label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: #666; }
-  select {
-    font-family: inherit;
-    padding: 6px 8px;
-    border: 1px solid var(--line);
-    border-radius: 3px;
-    font-size: 0.9rem;
-  }
   .status {
-    font-family: 'Helvetica Neue', Arial, sans-serif;
-    font-size: 0.85rem;
-    color: #777;
-    margin: 4px 0 18px;
-    min-height: 1.2em;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem;
+    color: #777; margin: 4px 0 18px; min-height: 1.2em;
   }
   .chart-card {
-    background: #fff;
-    border: 1px solid var(--line);
-    border-radius: 4px;
-    padding: 16px;
-    margin-bottom: 20px;
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 4px; padding: 16px; margin-bottom: 20px;
   }
   .chart-card h2 {
-    font-size: 1rem;
-    margin: 0 0 12px;
+    font-size: 1rem; margin: 0 0 12px;
     font-family: 'Helvetica Neue', Arial, sans-serif;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #555;
+    text-transform: uppercase; letter-spacing: 0.08em; color: #555;
   }
 </style>
 </head>
@@ -102,46 +55,48 @@
 </header>
 
 <main>
-  <div class="controls">
-    <div class="field">
-      <label for="varSelect">Variable</label>
-      <select id="varSelect">
-        <option value="max">Max Temp (°C)</option>
-        <option value="min">Min Temp (°C)</option>
-        <option value="mean">Mean Temp (°C)</option>
-      </select>
-    </div>
-  </div>
   <div class="status" id="status">Loading data…</div>
+
   <div class="chart-card">
-    <h2 id="chartTitle">Daily climatology</h2>
-    <canvas id="climChart" height="320"></canvas>
+    <h2>Daily max temp climatology (°C)</h2>
+    <canvas id="maxChart" height="280"></canvas>
   </div>
+
   <div class="chart-card">
-    <h2 id="anomTitle">Deviation from mean (±1σ and ±2σ)</h2>
+    <h2>Daily min temp climatology (°C)</h2>
+    <canvas id="minChart" height="280"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Deviation from mean — max above / min below (°C)</h2>
     <canvas id="anomChart" height="240"></canvas>
   </div>
 </main>
 
 <script>
-let climChart = null;
-let anomChart  = null;
-let aggregated = null;
+let maxChart  = null;
+let minChart  = null;
+let anomChart = null;
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTH_DAYS  = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const WINDOW = 7;
 
 function buildDayKeys() {
   const keys = [];
-  for (let m = 0; m < 12; m++) {
-    for (let d = 1; d <= MONTH_DAYS[m]; d++) {
+  for (let m = 0; m < 12; m++)
+    for (let d = 1; d <= MONTH_DAYS[m]; d++)
       keys.push(`${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
-    }
-  }
   return keys;
 }
-
 const DAY_KEYS = buildDayKeys();
+
+const X_TICKS = {
+  autoSkip: false,
+  maxRotation: 0,
+  callback: (_, i) => DAY_KEYS[i]?.endsWith('-01')
+    ? MONTH_NAMES[parseInt(DAY_KEYS[i]) - 1] : '',
+};
 
 function parseCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -158,11 +113,7 @@ function parseCSV(text) {
     const max  = parseFloat(cols[maxIdx]);
     const min  = parseFloat(cols[minIdx]);
     if (!date) continue;
-    rows.push({
-      date,
-      max: isFinite(max) ? max : null,
-      min: isFinite(min) ? min : null,
-    });
+    rows.push({ date, max: isFinite(max) ? max : null, min: isFinite(min) ? min : null });
   }
   return rows;
 }
@@ -170,14 +121,11 @@ function parseCSV(text) {
 async function loadAll() {
   const years = Array.from({length: 2026 - 1951 + 1}, (_, i) => 1951 + i);
   document.getElementById('status').textContent = `Loading ${years.length} data files…`;
-
   const texts = await Promise.all(years.map(year => {
     const station = year < 2010 ? 6157 : 48568;
     return fetch(`data/weather-${station}-${year}.csv`)
-      .then(r => r.ok ? r.text() : null)
-      .catch(() => null);
+      .then(r => r.ok ? r.text() : null).catch(() => null);
   }));
-
   const byMMDD = {};
   let loaded = 0;
   for (const text of texts) {
@@ -185,10 +133,9 @@ async function loadAll() {
     loaded++;
     for (const row of parseCSV(text)) {
       const key = row.date.slice(5);
-      if (!byMMDD[key]) byMMDD[key] = { max: [], min: [], mean: [] };
+      if (!byMMDD[key]) byMMDD[key] = { max: [], min: [] };
       if (row.max !== null) byMMDD[key].max.push(row.max);
       if (row.min !== null) byMMDD[key].min.push(row.min);
-      if (row.max !== null && row.min !== null) byMMDD[key].mean.push((row.max + row.min) / 2);
     }
   }
   document.getElementById('status').textContent = `Loaded ${loaded} years of data.`;
@@ -197,215 +144,102 @@ async function loadAll() {
 
 function stats(values) {
   if (!values || values.length < 2) return { mean: null, std: null };
-  const n    = values.length;
+  const n = values.length;
   const mean = values.reduce((a, b) => a + b, 0) / n;
   const std  = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1));
   return { mean, std };
 }
 
-const WINDOW = 7;
-
-function renderChart(byMMDD, variable) {
-  const means  = [], u1 = [], l1 = [], u2 = [], l2 = [];
+function windowedStats(byMMDD, variable) {
   const n = DAY_KEYS.length;
-
-  for (let i = 0; i < n; i++) {
-    const windowVals = [];
-    for (let offset = -WINDOW; offset <= WINDOW; offset++) {
-      const idx = ((i + offset) % n + n) % n;
-      windowVals.push(...(byMMDD[DAY_KEYS[idx]]?.[variable] ?? []));
+  return Array.from({length: n}, (_, i) => {
+    const vals = [];
+    for (let o = -WINDOW; o <= WINDOW; o++) {
+      const idx = ((i + o) % n + n) % n;
+      vals.push(...(byMMDD[DAY_KEYS[idx]]?.[variable] ?? []));
     }
-    const { mean, std } = stats(windowVals);
-    const fmt = v => v !== null ? +v.toFixed(2) : null;
-    means.push(fmt(mean));
-    u1.push(fmt(mean !== null ? mean + std     : null));
-    l1.push(fmt(mean !== null ? mean - std     : null));
-    u2.push(fmt(mean !== null ? mean + 2 * std : null));
-    l2.push(fmt(mean !== null ? mean - 2 * std : null));
-  }
-
-  const varLabel = { max: 'Max Temp (°C)', min: 'Min Temp (°C)', mean: 'Mean Temp (°C)' }[variable];
-  const rgb      = { max: '192,83,62',     min: '47,111,143',    mean: '91,122,74'       }[variable];
-
-  document.getElementById('chartTitle').textContent = `Daily climatology — ${varLabel}`;
-
-  // Anomaly series (mean subtracted)
-  const stds = means.map((m, i) => {
-    if (m === null) return null;
-    return +(u1[i] - m).toFixed(2);  // std = u1 - mean
+    return stats(vals);
   });
-  const zeros = means.map(m => m !== null ? 0 : null);
+}
 
-  document.getElementById('anomTitle').textContent = `Deviation from mean — ${varLabel}`;
+function fmt(v) { return v !== null ? +v.toFixed(2) : null; }
+
+function climatologyDatasets(statsList, rgb) {
+  const means = statsList.map(({mean}) => fmt(mean));
+  const u1 = statsList.map(({mean, std}) => fmt(mean !== null ? mean + std     : null));
+  const l1 = statsList.map(({mean, std}) => fmt(mean !== null ? mean - std     : null));
+  const u2 = statsList.map(({mean, std}) => fmt(mean !== null ? mean + 2 * std : null));
+  const l2 = statsList.map(({mean, std}) => fmt(mean !== null ? mean - 2 * std : null));
+  return [
+    { label: '±2σ', data: u2, borderColor: 'transparent', backgroundColor: `rgba(${rgb},0.12)`, fill: '+1', pointRadius: 0, tension: 0.3 },
+    { label: '_l2', data: l2, borderColor: 'transparent', backgroundColor: 'transparent',        fill: false, pointRadius: 0, tension: 0.3 },
+    { label: '±1σ', data: u1, borderColor: 'transparent', backgroundColor: `rgba(${rgb},0.22)`, fill: '+1', pointRadius: 0, tension: 0.3 },
+    { label: '_l1', data: l1, borderColor: 'transparent', backgroundColor: 'transparent',        fill: false, pointRadius: 0, tension: 0.3 },
+    { label: 'Mean', data: means, borderColor: `rgba(${rgb},1)`, backgroundColor: 'transparent', fill: false, pointRadius: 0, tension: 0.3, borderWidth: 2 },
+  ];
+}
+
+function makeChart(canvasId, datasets, yLabel) {
+  return new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: { labels: DAY_KEYS, datasets },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { filter: item => !item.text.startsWith('_') } } },
+      scales: { x: { ticks: X_TICKS }, y: { title: { display: true, text: yLabel } } }
+    }
+  });
+}
+
+function renderAll(byMMDD) {
+  const maxStats = windowedStats(byMMDD, 'max');
+  const minStats = windowedStats(byMMDD, 'min');
+
+  // Max temp climatology
+  if (maxChart) maxChart.destroy();
+  maxChart = makeChart('maxChart', climatologyDatasets(maxStats, '192,83,62'), '°C');
+
+  // Min temp climatology
+  if (minChart) minChart.destroy();
+  minChart = makeChart('minChart', climatologyDatasets(minStats, '47,111,143'), '°C');
+
+  // Combined deviation chart: max σ above x-axis, min σ below
+  const maxU2 = maxStats.map(({std}) => fmt(std !== null ? 2 * std : null));
+  const maxU1 = maxStats.map(({std}) => fmt(std));
+  const minL1 = minStats.map(({std}) => fmt(std !== null ? -std       : null));
+  const minL2 = minStats.map(({std}) => fmt(std !== null ? -2 * std   : null));
+  const zeros = maxStats.map(({mean}) => mean !== null ? 0 : null);
 
   if (anomChart) anomChart.destroy();
-
   anomChart = new Chart(document.getElementById('anomChart'), {
     type: 'line',
     data: {
       labels: DAY_KEYS,
       datasets: [
-        {
-          label: '±2σ',
-          data: stds.map(s => s !== null ? +(2 * s).toFixed(2) : null),
-          borderColor: 'transparent',
-          backgroundColor: `rgba(${rgb},0.12)`,
-          fill: '+1',
-          pointRadius: 0,
-          tension: 0.3,
-        },
-        {
-          label: '_neg2',
-          data: stds.map(s => s !== null ? +(-2 * s).toFixed(2) : null),
-          borderColor: 'transparent',
-          backgroundColor: 'transparent',
-          fill: false,
-          pointRadius: 0,
-          tension: 0.3,
-        },
-        {
-          label: '±1σ',
-          data: stds.map(s => s !== null ? +s.toFixed(2) : null),
-          borderColor: 'transparent',
-          backgroundColor: `rgba(${rgb},0.22)`,
-          fill: '+1',
-          pointRadius: 0,
-          tension: 0.3,
-        },
-        {
-          label: '_neg1',
-          data: stds.map(s => s !== null ? +(-s).toFixed(2) : null),
-          borderColor: 'transparent',
-          backgroundColor: 'transparent',
-          fill: false,
-          pointRadius: 0,
-          tension: 0.3,
-        },
-        {
-          label: 'Mean (0)',
-          data: zeros,
-          borderColor: `rgba(${rgb},1)`,
-          backgroundColor: 'transparent',
-          fill: false,
-          pointRadius: 0,
-          tension: 0,
-          borderWidth: 1.5,
-          borderDash: [4, 3],
-        },
+        // Above: max temp — outer strip (+1σ to +2σ) then inner (+0 to +1σ)
+        { label: 'Max ±2σ', data: maxU2, borderColor: 'transparent', backgroundColor: 'rgba(192,83,62,0.12)', fill: '+1', pointRadius: 0, tension: 0.3 },
+        { label: '_mu1',    data: maxU1, borderColor: 'transparent', backgroundColor: 'rgba(192,83,62,0.22)', fill: 'origin', pointRadius: 0, tension: 0.3 },
+        // Below: min temp — inner (0 to -1σ) then outer strip (-1σ to -2σ)
+        { label: '_ml1',    data: minL1, borderColor: 'transparent', backgroundColor: 'rgba(47,111,143,0.22)', fill: 'origin', pointRadius: 0, tension: 0.3 },
+        { label: 'Min ±2σ', data: minL2, borderColor: 'transparent', backgroundColor: 'rgba(47,111,143,0.12)', fill: '-1',    pointRadius: 0, tension: 0.3 },
+        // Zero line
+        { label: 'Zero', data: zeros, borderColor: 'rgba(26,35,48,0.4)', backgroundColor: 'transparent', fill: false, pointRadius: 0, tension: 0, borderWidth: 1, borderDash: [4, 3] },
       ]
     },
     options: {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { labels: { filter: item => !item.text.startsWith('_') } }
-      },
-      scales: {
-        x: {
-          ticks: {
-            autoSkip: false,
-            maxRotation: 0,
-            callback: (_, i) => DAY_KEYS[i]?.endsWith('-01')
-              ? MONTH_NAMES[parseInt(DAY_KEYS[i]) - 1]
-              : '',
-          }
-        },
-        y: { title: { display: true, text: '°C from mean' } }
-      }
-    }
-  });
-
-  if (climChart) climChart.destroy();
-
-  climChart = new Chart(document.getElementById('climChart'), {
-    type: 'line',
-    data: {
-      labels: DAY_KEYS,
-      datasets: [
-        {
-          label: '±2σ',
-          data: u2,
-          borderColor: 'transparent',
-          backgroundColor: `rgba(${rgb},0.12)`,
-          fill: '+1',
-          pointRadius: 0,
-          tension: 0.3,
-        },
-        {
-          label: '_lower2',
-          data: l2,
-          borderColor: 'transparent',
-          backgroundColor: 'transparent',
-          fill: false,
-          pointRadius: 0,
-          tension: 0.3,
-        },
-        {
-          label: '±1σ',
-          data: u1,
-          borderColor: 'transparent',
-          backgroundColor: `rgba(${rgb},0.22)`,
-          fill: '+1',
-          pointRadius: 0,
-          tension: 0.3,
-        },
-        {
-          label: '_lower1',
-          data: l1,
-          borderColor: 'transparent',
-          backgroundColor: 'transparent',
-          fill: false,
-          pointRadius: 0,
-          tension: 0.3,
-        },
-        {
-          label: 'Mean',
-          data: means,
-          borderColor: `rgba(${rgb},1)`,
-          backgroundColor: 'transparent',
-          fill: false,
-          pointRadius: 0,
-          tension: 0.3,
-          borderWidth: 2,
-        },
-      ]
-    },
-    options: {
-      responsive: true,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: {
-          labels: {
-            filter: item => !item.text.startsWith('_'),
-          }
-        }
-      },
-      scales: {
-        x: {
-          ticks: {
-            autoSkip: false,
-            maxRotation: 0,
-            callback: (_, i) => DAY_KEYS[i]?.endsWith('-01')
-              ? MONTH_NAMES[parseInt(DAY_KEYS[i]) - 1]
-              : '',
-          }
-        },
-        y: {
-          title: { display: true, text: varLabel }
-        }
-      }
+      plugins: { legend: { labels: { filter: item => !item.text.startsWith('_') } } },
+      scales: { x: { ticks: X_TICKS }, y: { title: { display: true, text: '°C from mean' } } }
     }
   });
 }
 
 (async () => {
-  aggregated = await loadAll();
-  renderChart(aggregated, document.getElementById('varSelect').value);
+  const byMMDD = await loadAll();
+  renderAll(byMMDD);
 })();
-
-document.getElementById('varSelect').addEventListener('change', e => {
-  if (aggregated) renderChart(aggregated, e.target.value);
-});
 </script>
 </body>
 </html>
