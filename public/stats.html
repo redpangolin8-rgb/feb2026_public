@@ -117,10 +117,15 @@
     <h2 id="chartTitle">Daily climatology</h2>
     <canvas id="climChart" height="320"></canvas>
   </div>
+  <div class="chart-card">
+    <h2 id="anomTitle">Deviation from mean (±1σ and ±2σ)</h2>
+    <canvas id="anomChart" height="240"></canvas>
+  </div>
 </main>
 
 <script>
 let climChart = null;
+let anomChart  = null;
 let aggregated = null;
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -223,6 +228,92 @@ function renderChart(byMMDD, variable) {
   const rgb      = { max: '192,83,62',     min: '47,111,143',    mean: '91,122,74'       }[variable];
 
   document.getElementById('chartTitle').textContent = `Daily climatology — ${varLabel}`;
+
+  // Anomaly series (mean subtracted)
+  const stds = means.map((m, i) => {
+    if (m === null) return null;
+    return +(u1[i] - m).toFixed(2);  // std = u1 - mean
+  });
+  const zeros = means.map(m => m !== null ? 0 : null);
+
+  document.getElementById('anomTitle').textContent = `Deviation from mean — ${varLabel}`;
+
+  if (anomChart) anomChart.destroy();
+
+  anomChart = new Chart(document.getElementById('anomChart'), {
+    type: 'line',
+    data: {
+      labels: DAY_KEYS,
+      datasets: [
+        {
+          label: '±2σ',
+          data: stds.map(s => s !== null ? +(2 * s).toFixed(2) : null),
+          borderColor: 'transparent',
+          backgroundColor: `rgba(${rgb},0.12)`,
+          fill: '+1',
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: '_neg2',
+          data: stds.map(s => s !== null ? +(-2 * s).toFixed(2) : null),
+          borderColor: 'transparent',
+          backgroundColor: 'transparent',
+          fill: false,
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: '±1σ',
+          data: stds.map(s => s !== null ? +s.toFixed(2) : null),
+          borderColor: 'transparent',
+          backgroundColor: `rgba(${rgb},0.22)`,
+          fill: '+1',
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: '_neg1',
+          data: stds.map(s => s !== null ? +(-s).toFixed(2) : null),
+          borderColor: 'transparent',
+          backgroundColor: 'transparent',
+          fill: false,
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: 'Mean (0)',
+          data: zeros,
+          borderColor: `rgba(${rgb},1)`,
+          backgroundColor: 'transparent',
+          fill: false,
+          pointRadius: 0,
+          tension: 0,
+          borderWidth: 1.5,
+          borderDash: [4, 3],
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { filter: item => !item.text.startsWith('_') } }
+      },
+      scales: {
+        x: {
+          ticks: {
+            autoSkip: false,
+            maxRotation: 0,
+            callback: (_, i) => DAY_KEYS[i]?.endsWith('-01')
+              ? MONTH_NAMES[parseInt(DAY_KEYS[i]) - 1]
+              : '',
+          }
+        },
+        y: { title: { display: true, text: '°C from mean' } }
+      }
+    }
+  });
 
   if (climChart) climChart.destroy();
 
