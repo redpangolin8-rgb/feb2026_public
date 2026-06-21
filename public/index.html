@@ -1,11 +1,139 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hello World</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fredericton Airport — Climate</title>
+<style>
+  :root {
+    --ink: #1a2330;
+    --paper: #f6f4ee;
+    --line: #d8d2c4;
+    --accent: #e8a23c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+  header {
+    padding: 48px 24px 36px;
+    border-bottom: 2px solid var(--ink);
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  header h1 { margin: 0; font-size: 2.2rem; letter-spacing: 0.02em; }
+  header p {
+    margin: 10px 0 0;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.9rem;
+    color: #555;
+    line-height: 1.5;
+  }
+  .station-tag {
+    display: inline-block; margin-top: 14px;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    border: 1px solid var(--ink); padding: 3px 10px; border-radius: 2px;
+  }
+  main {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 24px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+  }
+  .card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 24px;
+    text-decoration: none;
+    color: var(--ink);
+    display: block;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .card:hover {
+    border-color: var(--ink);
+    box-shadow: 0 2px 8px rgba(26,35,48,0.1);
+  }
+  .card-label {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #888;
+    margin-bottom: 8px;
+  }
+  .card h2 {
+    margin: 0 0 10px;
+    font-size: 1.15rem;
+    letter-spacing: 0.01em;
+  }
+  .card p {
+    margin: 0;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.82rem;
+    color: #666;
+    line-height: 1.5;
+  }
+  .card-arrow {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.8rem;
+    color: var(--accent);
+    margin-top: 14px;
+    display: block;
+  }
+  footer {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 24px 40px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.78rem;
+    color: #999;
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+  }
+</style>
 </head>
 <body>
-  <h1>Hello, World!</h1>
+
+<header>
+  <h1>Fredericton Airport</h1>
+  <p>Historical daily weather data and climate analysis · 1951–2026</p>
+  <span class="station-tag">Stations 6157 / 48568 · ECCC</span>
+</header>
+
+<main>
+  <a class="card" href="weather.html">
+    <div class="card-label">Daily records</div>
+    <h2>Weather History</h2>
+    <p>Browse daily max/min temperature and precipitation by year, with a rolling 3-day total.</p>
+    <span class="card-arrow">View →</span>
+  </a>
+
+  <a class="card" href="stats.html">
+    <div class="card-label">Climatology</div>
+    <h2>Climate Statistics</h2>
+    <p>Daily climatological mean ±1σ and ±2σ bands for max and min temperature, computed with a ±7-day window.</p>
+    <span class="card-arrow">View →</span>
+  </a>
+
+  <a class="card" href="anomalies.html">
+    <div class="card-label">Analysis</div>
+    <h2>Climate Anomalies</h2>
+    <p>Days per year where daily max temperature exceeded the climatological mean+1σ threshold.</p>
+    <span class="card-arrow">View →</span>
+  </a>
+</main>
+
+<footer>
+  Data source: Environment and Climate Change Canada (ECCC) · Station 6157 (1951–2010) and 48568 (2010–2026)
+</footer>
+
 </body>
 </html>

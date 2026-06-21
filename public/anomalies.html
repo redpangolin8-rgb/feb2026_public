@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fredericton Airport — Climate Anomalies</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --ink: #1a2330;
+    --paper: #f6f4ee;
+    --line: #d8d2c4;
+    --accent: #e8a23c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  header { padding: 28px 24px 18px; border-bottom: 2px solid var(--ink); }
+  header h1 { margin: 0; font-size: 1.8rem; letter-spacing: 0.02em; }
+  header p { margin: 6px 0 0; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem; color: #555; }
+  header nav { margin-top: 10px; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem; }
+  header nav a { color: var(--ink); margin-right: 16px; }
+  .station-tag {
+    display: inline-block; margin-top: 10px;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    border: 1px solid var(--ink); padding: 3px 10px; border-radius: 2px;
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px; }
+  .status {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem;
+    color: #777; margin: 4px 0 18px; min-height: 1.2em;
+  }
+  .chart-card {
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 4px; padding: 16px; margin-bottom: 20px;
+  }
+  .chart-card h2 {
+    font-size: 1rem; margin: 0 0 12px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.08em; color: #555;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Climate Anomalies</h1>
+  <p>Days per year exceeding the ±7-day windowed climatological threshold · 1951–2026</p>
+  <span class="station-tag">Fredericton Airport · Stations 6157 / 48568</span>
+  <nav>
+    <a href="index.html">← Home</a>
+    <a href="weather.html" style="margin-left:16px">Daily weather history</a>
+    <a href="stats.html" style="margin-left:16px">Climate statistics</a>
+  </nav>
+</header>
+
+<main>
+  <div class="status" id="status">Loading data…</div>
+
+  <div class="chart-card">
+    <h2>Days per year with daily max temp above mean + 1σ</h2>
+    <canvas id="anomCountChart" height="260"></canvas>
+  </div>
+</main>
+
+<script>
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_DAYS  = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const WINDOW = 7;
+const YEARS  = Array.from({length: 2026 - 1951 + 1}, (_, i) => 1951 + i);
+
+function buildDayKeys() {
+  const keys = [];
+  for (let m = 0; m < 12; m++)
+    for (let d = 1; d <= MONTH_DAYS[m]; d++)
+      keys.push(`${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
+  return keys;
+}
+const DAY_KEYS = buildDayKeys();
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const header = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+  const dateIdx = header.findIndex(h => /date\/time|date$/i.test(h));
+  const maxIdx  = header.findIndex(h => /max temp/i.test(h));
+  if (dateIdx === -1 || maxIdx === -1) return [];
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.replace(/"/g,'').trim());
+    if (cols.length < header.length) continue;
+    const date = cols[dateIdx];
+    const max  = parseFloat(cols[maxIdx]);
+    if (!date) continue;
+    rows.push({ date, max: isFinite(max) ? max : null });
+  }
+  return rows;
+}
+
+async function loadAll() {
+  document.getElementById('status').textContent = `Loading ${YEARS.length} data files…`;
+  const texts = await Promise.all(YEARS.map(year => {
+    const station = year < 2010 ? 6157 : 48568;
+    return fetch(`data/weather-${station}-${year}.csv`)
+      .then(r => r.ok ? r.text() : null).catch(() => null);
+  }));
+
+  // byMMDD: climatological values pooled by calendar day
+  const byMMDD = {};
+  // byYear: actual observations keyed by year then MM-DD
+  const byYear = {};
+
+  let loaded = 0;
+  for (let yi = 0; yi < YEARS.length; yi++) {
+    const text = texts[yi];
+    if (!text) continue;
+    loaded++;
+    const year = YEARS[yi];
+    byYear[year] = {};
+    for (const row of parseCSV(text)) {
+      const mmdd = row.date.slice(5);
+      if (!byMMDD[mmdd]) byMMDD[mmdd] = [];
+      if (row.max !== null) {
+        byMMDD[mmdd].push(row.max);
+        byYear[year][mmdd] = row.max;
+      }
+    }
+  }
+  document.getElementById('status').textContent = `Loaded ${loaded} years of data.`;
+  return { byMMDD, byYear };
+}
+
+function stats(values) {
+  if (!values || values.length < 2) return { mean: null, std: null };
+  const n    = values.length;
+  const mean = values.reduce((a, b) => a + b, 0) / n;
+  const std  = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1));
+  return { mean, std };
+}
+
+function buildThresholds(byMMDD) {
+  // For each calendar day, compute mean + 1σ using the ±WINDOW day pool
+  const n = DAY_KEYS.length;
+  const thresholds = {};
+  for (let i = 0; i < n; i++) {
+    const vals = [];
+    for (let o = -WINDOW; o <= WINDOW; o++) {
+      const idx = ((i + o) % n + n) % n;
+      vals.push(...(byMMDD[DAY_KEYS[idx]] ?? []));
+    }
+    const { mean, std } = stats(vals);
+    thresholds[DAY_KEYS[i]] = mean !== null ? mean + std : null;
+  }
+  return thresholds;
+}
+
+function countAnomalyDays(byYear, thresholds) {
+  return YEARS.map(year => {
+    const days = byYear[year];
+    if (!days) return null;
+    let count = 0;
+    for (const [mmdd, maxTemp] of Object.entries(days)) {
+      const threshold = thresholds[mmdd];
+      if (threshold !== null && maxTemp > threshold) count++;
+    }
+    return count;
+  });
+}
+
+(async () => {
+  const { byMMDD, byYear } = await loadAll();
+  const thresholds = buildThresholds(byMMDD);
+  const counts     = countAnomalyDays(byYear, thresholds);
+
+  // Expected count under normality: ~15.9% of days per year
+  const expectedLine = YEARS.map(() => +(365 * 0.1587).toFixed(1));
+
+  new Chart(document.getElementById('anomCountChart'), {
+    type: 'bar',
+    data: {
+      labels: YEARS,
+      datasets: [
+        {
+          label: 'Days above mean + 1σ',
+          data: counts,
+          backgroundColor: 'rgba(192,83,62,0.7)',
+          borderColor: 'rgba(192,83,62,1)',
+          borderWidth: 1,
+        },
+        {
+          label: 'Expected (~58 days)',
+          data: expectedLine,
+          type: 'line',
+          borderColor: 'rgba(26,35,48,0.4)',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          borderDash: [5, 4],
+          pointRadius: 0,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: {
+          ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 20 }
+        },
+        y: {
+          title: { display: true, text: 'Days' },
+          beginAtZero: true,
+        }
+      }
+    }
+  });
+})();
+</script>
+</body>
+</html>
