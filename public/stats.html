@@ -75,12 +75,18 @@
     <h2>Deviation from mean — max above / min below (°C)</h2>
     <canvas id="anomChart" height="240"></canvas>
   </div>
+
+  <div class="chart-card">
+    <h2>Daily precipitation climatology (mm)</h2>
+    <canvas id="precipChart" height="240"></canvas>
+  </div>
 </main>
 
 <script>
-let maxChart  = null;
-let minChart  = null;
-let anomChart = null;
+let maxChart    = null;
+let minChart    = null;
+let anomChart   = null;
+let precipChart = null;
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTH_DAYS  = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -105,19 +111,26 @@ const X_TICKS = {
 function parseCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   const header = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
-  const dateIdx = header.findIndex(h => /date\/time|date$/i.test(h));
-  const maxIdx  = header.findIndex(h => /max temp/i.test(h));
-  const minIdx  = header.findIndex(h => /min temp/i.test(h));
+  const dateIdx   = header.findIndex(h => /date\/time|date$/i.test(h));
+  const maxIdx    = header.findIndex(h => /max temp/i.test(h));
+  const minIdx    = header.findIndex(h => /min temp/i.test(h));
+  const precipIdx = header.findIndex(h => /total precip/i.test(h));
   if (dateIdx === -1 || maxIdx === -1 || minIdx === -1) return [];
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(',').map(c => c.replace(/"/g,'').trim());
     if (cols.length < header.length) continue;
-    const date = cols[dateIdx];
-    const max  = parseFloat(cols[maxIdx]);
-    const min  = parseFloat(cols[minIdx]);
+    const date   = cols[dateIdx];
+    const max    = parseFloat(cols[maxIdx]);
+    const min    = parseFloat(cols[minIdx]);
+    const precip = precipIdx !== -1 ? parseFloat(cols[precipIdx]) : NaN;
     if (!date) continue;
-    rows.push({ date, max: isFinite(max) ? max : null, min: isFinite(min) ? min : null });
+    rows.push({
+      date,
+      max:    isFinite(max)    ? max    : null,
+      min:    isFinite(min)    ? min    : null,
+      precip: isFinite(precip) ? precip : null,
+    });
   }
   return rows;
 }
@@ -139,9 +152,10 @@ async function loadAll() {
     loaded++;
     for (const row of parseCSV(text)) {
       const key = row.date.slice(5);
-      if (!byMMDD[key]) byMMDD[key] = { max: [], min: [] };
-      if (row.max !== null) byMMDD[key].max.push(row.max);
-      if (row.min !== null) byMMDD[key].min.push(row.min);
+      if (!byMMDD[key]) byMMDD[key] = { max: [], min: [], precip: [] };
+      if (row.max    !== null) byMMDD[key].max.push(row.max);
+      if (row.min    !== null) byMMDD[key].min.push(row.min);
+      if (row.precip !== null) byMMDD[key].precip.push(row.precip);
     }
   }
   document.getElementById('status').textContent = `Loaded ${loaded} years of data.`;
@@ -185,6 +199,22 @@ function climatologyDatasets(statsList, rgb) {
   ];
 }
 
+function precipDatasets(statsList, rgb) {
+  const clamp0 = v => v !== null ? Math.max(0, v) : null;
+  const means = statsList.map(({mean}) => fmt(mean));
+  const u1 = statsList.map(({mean, std}) => fmt(mean !== null ? mean + std       : null));
+  const l1 = statsList.map(({mean, std}) => fmt(mean !== null ? clamp0(mean - std)     : null));
+  const u2 = statsList.map(({mean, std}) => fmt(mean !== null ? mean + 2 * std   : null));
+  const l2 = statsList.map(({mean, std}) => fmt(mean !== null ? clamp0(mean - 2 * std) : null));
+  return [
+    { label: '±2σ', data: u2, borderColor: 'transparent', backgroundColor: `rgba(${rgb},0.12)`, fill: '+1', pointRadius: 0, tension: 0.3 },
+    { label: '_l2', data: l2, borderColor: 'transparent', backgroundColor: 'transparent',        fill: false, pointRadius: 0, tension: 0.3 },
+    { label: '±1σ', data: u1, borderColor: 'transparent', backgroundColor: `rgba(${rgb},0.22)`, fill: '+1', pointRadius: 0, tension: 0.3 },
+    { label: '_l1', data: l1, borderColor: 'transparent', backgroundColor: 'transparent',        fill: false, pointRadius: 0, tension: 0.3 },
+    { label: 'Mean', data: means, borderColor: `rgba(${rgb},1)`, backgroundColor: 'transparent', fill: false, pointRadius: 0, tension: 0.3, borderWidth: 2 },
+  ];
+}
+
 function makeChart(canvasId, datasets, yLabel) {
   return new Chart(document.getElementById(canvasId), {
     type: 'line',
@@ -199,8 +229,9 @@ function makeChart(canvasId, datasets, yLabel) {
 }
 
 function renderAll(byMMDD) {
-  const maxStats = windowedStats(byMMDD, 'max');
-  const minStats = windowedStats(byMMDD, 'min');
+  const maxStats    = windowedStats(byMMDD, 'max');
+  const minStats    = windowedStats(byMMDD, 'min');
+  const precipStats = windowedStats(byMMDD, 'precip');
 
   // Max temp climatology
   if (maxChart) maxChart.destroy();
@@ -216,6 +247,10 @@ function renderAll(byMMDD) {
   const minL1 = minStats.map(({std}) => fmt(std !== null ? -std       : null));
   const minL2 = minStats.map(({std}) => fmt(std !== null ? -2 * std   : null));
   const zeros = maxStats.map(({mean}) => mean !== null ? 0 : null);
+
+  // Precipitation climatology
+  if (precipChart) precipChart.destroy();
+  precipChart = makeChart('precipChart', precipDatasets(precipStats, '91,122,74'), 'mm');
 
   if (anomChart) anomChart.destroy();
   anomChart = new Chart(document.getElementById('anomChart'), {
