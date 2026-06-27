@@ -77,6 +77,11 @@
 
     <div id="debugTable" style="margin-top:18px;overflow-x:auto;"></div>
   </div>
+
+  <div class="chart-card">
+    <h2>Full time series · monthly totals and 3-month average (mm)</h2>
+    <canvas id="timeSeriesChart" height="260"></canvas>
+  </div>
 </main>
 
 <script>
@@ -280,6 +285,65 @@ function stats(values) {
   document.getElementById('chunkNext').addEventListener('click', () => updateChunk(chunkStart + CHUNK_SIZE));
 
   updateChunk(chunkStart); // initialise label and button states
+
+  // ── Chart 3: full time series with 3-month centred average ───────────────
+  const tsLabels = [];
+  const tsMonthly = [];
+  for (const year of YEARS) {
+    for (let m = 0; m < 12; m++) {
+      tsLabels.push(`${MONTH_NAMES[m]} ${year}`);
+      tsMonthly.push(yearMonthly[year]?.[m] ?? null);
+    }
+  }
+
+  const ts3mo = tsMonthly.map((_, i) => {
+    if (i === 0 || i === tsMonthly.length - 1) return null;
+    const a = tsMonthly[i - 1], b = tsMonthly[i], c = tsMonthly[i + 1];
+    return (a !== null && b !== null && c !== null) ? +((a + b + c) / 3).toFixed(1) : null;
+  });
+
+  new Chart(document.getElementById('timeSeriesChart'), {
+    type: 'bar',
+    data: {
+      labels: tsLabels,
+      datasets: [
+        {
+          label: 'Monthly total (mm)',
+          data: tsMonthly,
+          backgroundColor: 'rgba(91,122,74,0.35)',
+          borderColor: 'transparent',
+          borderWidth: 0,
+          order: 2,
+        },
+        {
+          label: '3-month average (mm)',
+          data: ts3mo,
+          type: 'line',
+          borderColor: 'rgba(47,111,143,1)',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.3,
+          order: 1,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: {
+          ticks: {
+            maxRotation: 0,
+            autoSkip: false,
+            callback: (_, i) => tsLabels[i]?.startsWith('Jan') ? tsLabels[i].slice(4) : '',
+          }
+        },
+        y: { title: { display: true, text: 'mm' }, beginAtZero: true }
+      }
+    }
+  });
 })();
 </script>
 </body>
