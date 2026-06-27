@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fredericton Airport — Precipitation Statistics</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --ink: #1a2330;
+    --paper: #f6f4ee;
+    --line: #d8d2c4;
+    --accent: #e8a23c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  header { padding: 28px 24px 18px; border-bottom: 2px solid var(--ink); }
+  header h1 { margin: 0; font-size: 1.8rem; letter-spacing: 0.02em; }
+  header p { margin: 6px 0 0; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem; color: #555; }
+  header nav { margin-top: 10px; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem; }
+  header nav a { color: var(--ink); margin-right: 16px; }
+  .station-tag {
+    display: inline-block; margin-top: 10px;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    border: 1px solid var(--ink); padding: 3px 10px; border-radius: 2px;
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px; }
+  .status {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem;
+    color: #777; margin: 4px 0 18px; min-height: 1.2em;
+  }
+  .chart-card {
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 4px; padding: 16px; margin-bottom: 20px;
+  }
+  .chart-card h2 {
+    font-size: 1rem; margin: 0 0 12px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.08em; color: #555;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Precipitation Statistics</h1>
+  <p>Monthly and seasonal precipitation climatology · 1951–<span id="endYear"></span></p>
+  <span class="station-tag">Fredericton Airport · Stations 6157 / 48568</span>
+  <nav>
+    <a href="index.html">← Home</a>
+    <a href="weather.html">Daily weather history</a>
+    <a href="stats.html">Climate statistics</a>
+  </nav>
+</header>
+
+<main>
+  <div class="status" id="status">Loading data…</div>
+
+  <div class="chart-card">
+    <h2>Average monthly total precipitation (mm) · mean ± 1σ</h2>
+    <canvas id="monthlyAvgChart" height="280"></canvas>
+  </div>
+</main>
+
+<script>
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const END_YEAR = new Date().getFullYear();
+document.getElementById('endYear').textContent = END_YEAR;
+const YEARS = Array.from({length: END_YEAR - 1951 + 1}, (_, i) => 1951 + i);
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const header = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+  const dateIdx   = header.findIndex(h => /date\/time|date$/i.test(h));
+  const precipIdx = header.findIndex(h => /total precip/i.test(h));
+  if (dateIdx === -1 || precipIdx === -1) return [];
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.replace(/"/g,'').trim());
+    if (cols.length < header.length) continue;
+    const date   = cols[dateIdx];
+    const precip = parseFloat(cols[precipIdx]);
+    if (!date) continue;
+    rows.push({ date, precip: isFinite(precip) ? precip : null });
+  }
+  return rows;
+}
+
+async function loadAll() {
+  document.getElementById('status').textContent = `Loading ${YEARS.length} data files…`;
+  const texts = await Promise.all(YEARS.map(year => {
+    const station = year < 2010 ? 6157 : 48568;
+    return fetch(`data/weather-${station}-${year}.csv`)
+      .then(r => r.ok ? r.text() : null).catch(() => null);
+  }));
+
+  // monthlyTotals[month][year] = total precip for that month/year (or null)
+  const monthlyTotals = Array.from({length: 12}, () => ({}));
+
+  let loaded = 0;
+  for (let yi = 0; yi < YEARS.length; yi++) {
+    const text = texts[yi];
+    if (!text) continue;
+    loaded++;
+    const year = YEARS[yi];
+    const monthSums = Array(12).fill(0);
+    const monthValid = Array(12).fill(true);
+
+    for (const row of parseCSV(text)) {
+      const month = parseInt(row.date.slice(5, 7)) - 1;
+      if (row.precip !== null) {
+        monthSums[month] += row.precip;
+      } else {
+        monthValid[month] = false;
+      }
+    }
+    for (let m = 0; m < 12; m++) {
+      monthlyTotals[m][year] = monthValid[m] ? monthSums[m] : null;
+    }
+  }
+
+  document.getElementById('status').textContent = `Loaded ${loaded} years of data.`;
+  return monthlyTotals;
+}
+
+function stats(values) {
+  const valid = values.filter(v => v !== null && isFinite(v));
+  if (valid.length < 2) return { mean: null, std: null };
+  const n    = valid.length;
+  const mean = valid.reduce((a, b) => a + b, 0) / n;
+  const std  = Math.sqrt(valid.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1));
+  return { mean, std };
+}
+
+(async () => {
+  const monthlyTotals = await loadAll();
+
+  const monthStats = monthlyTotals.map(yearMap => stats(Object.values(yearMap)));
+  const means  = monthStats.map(({mean}) => mean !== null ? +mean.toFixed(1) : null);
+  const upper1 = monthStats.map(({mean, std}) => mean !== null ? +(mean + std).toFixed(1) : null);
+  const lower1 = monthStats.map(({mean, std}) => mean !== null ? +Math.max(0, mean - std).toFixed(1) : null);
+
+  new Chart(document.getElementById('monthlyAvgChart'), {
+    type: 'bar',
+    data: {
+      labels: MONTH_NAMES,
+      datasets: [
+        {
+          label: 'Mean (mm)',
+          data: means,
+          backgroundColor: 'rgba(91,122,74,0.75)',
+          borderColor: 'rgba(91,122,74,1)',
+          borderWidth: 1,
+          order: 2,
+        },
+        {
+          label: '+1σ',
+          data: upper1,
+          type: 'line',
+          borderColor: 'rgba(91,122,74,0.5)',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          borderDash: [4, 3],
+          pointRadius: 3,
+          pointStyle: 'dash',
+          order: 1,
+        },
+        {
+          label: '−1σ',
+          data: lower1,
+          type: 'line',
+          borderColor: 'rgba(91,122,74,0.5)',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          borderDash: [4, 3],
+          pointRadius: 3,
+          pointStyle: 'dash',
+          order: 1,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        y: {
+          title: { display: true, text: 'mm' },
+          beginAtZero: true,
+        }
+      }
+    }
+  });
+})();
+</script>
+</body>
+</html>
