@@ -74,6 +74,8 @@
       <button id="chunkNext" style="font-family:inherit;background:var(--ink);color:#fff;border:none;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:0.85rem;">Next &#8250;</button>
     </div>
     <canvas id="yearlyChart" height="300"></canvas>
+
+    <div id="debugTable" style="margin-top:18px;overflow-x:auto;"></div>
   </div>
 </main>
 
@@ -130,20 +132,20 @@ async function loadAll() {
     if (!text) continue;
     loaded++;
     const year = YEARS[yi];
-    const monthSums  = Array(12).fill(0);
-    const monthValid = Array(12).fill(true);
+    const monthSums   = Array(12).fill(0);
+    const monthCounts = Array(12).fill(0);  // days with valid precip data
 
     for (const row of parseCSV(text)) {
       const month = parseInt(row.date.slice(5, 7)) - 1;
       if (row.precip !== null) {
-        monthSums[month] += row.precip;
-      } else {
-        monthValid[month] = false;
+        monthSums[month]   += row.precip;
+        monthCounts[month] += 1;
       }
     }
     yearMonthly[year] = [];
     for (let m = 0; m < 12; m++) {
-      const val = monthValid[m] ? +monthSums[m].toFixed(1) : null;
+      // null only if no days at all had data for this month
+      const val = monthCounts[m] > 0 ? +monthSums[m].toFixed(1) : null;
       monthlyTotals[m][year] = val;
       yearMonthly[year][m]   = val;
     }
@@ -224,6 +226,42 @@ function stats(values) {
     }
   });
 
+  function renderDebugTable(chunkYears) {
+    const el = document.getElementById('debugTable');
+    const tbl = document.createElement('table');
+    tbl.style.cssText = 'border-collapse:collapse;font-family:"Helvetica Neue",Arial,sans-serif;font-size:0.78rem;width:100%';
+
+    // Header row
+    const thead = tbl.createTHead();
+    const hrow  = thead.insertRow();
+    ['Month', ...chunkYears].forEach((h, i) => {
+      const th = document.createElement('th');
+      th.textContent = h;
+      th.style.cssText = `padding:4px 10px;text-align:${i===0?'left':'right'};border-bottom:1px solid #d8d2c4;color:#555;font-weight:600`;
+      if (i > 0) th.style.color = YEAR_COLORS[i - 1];
+      hrow.appendChild(th);
+    });
+
+    // Data rows
+    const tbody = tbl.createTBody();
+    MONTH_NAMES.forEach((name, m) => {
+      const row = tbody.insertRow();
+      const nameCell = row.insertCell();
+      nameCell.textContent = name;
+      nameCell.style.cssText = 'padding:3px 10px;border-bottom:1px solid #f0ede6;color:#444';
+      chunkYears.forEach(year => {
+        const td = row.insertCell();
+        const val = yearMonthly[year]?.[m];
+        td.textContent = val !== null && val !== undefined ? val.toFixed(1) : '—';
+        td.style.cssText = 'padding:3px 10px;text-align:right;border-bottom:1px solid #f0ede6;' +
+          (val === null || val === undefined ? 'color:#bbb' : 'color:#333');
+      });
+    });
+
+    el.textContent = '';
+    el.appendChild(tbl);
+  }
+
   function updateChunk(newStart) {
     chunkStart = Math.max(0, Math.min(newStart, YEARS.length - CHUNK_SIZE));
     const chunkYears = YEARS.slice(chunkStart, chunkStart + CHUNK_SIZE);
@@ -234,6 +272,8 @@ function stats(values) {
       `${chunkYears[0]}–${chunkYears[chunkYears.length - 1]}`;
     document.getElementById('chunkPrev').disabled = chunkStart === 0;
     document.getElementById('chunkNext').disabled = chunkStart + CHUNK_SIZE >= YEARS.length;
+
+    renderDebugTable(chunkYears);
   }
 
   document.getElementById('chunkPrev').addEventListener('click', () => updateChunk(chunkStart - CHUNK_SIZE));
