@@ -65,6 +65,16 @@
     <h2>Average monthly total precipitation (mm) · mean ± 1σ</h2>
     <canvas id="monthlyAvgChart" height="280"></canvas>
   </div>
+
+  <div class="chart-card">
+    <h2>Monthly totals by year</h2>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;font-family:'Helvetica Neue',Arial,sans-serif;">
+      <button id="chunkPrev" style="font-family:inherit;background:var(--ink);color:#fff;border:none;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:0.85rem;">&#8249; Prev</button>
+      <span id="chunkLabel" style="font-size:0.9rem;min-width:90px;text-align:center;"></span>
+      <button id="chunkNext" style="font-family:inherit;background:var(--ink);color:#fff;border:none;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:0.85rem;">Next &#8250;</button>
+    </div>
+    <canvas id="yearlyChart" height="300"></canvas>
+  </div>
 </main>
 
 <script>
@@ -72,6 +82,16 @@ const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct'
 const END_YEAR = new Date().getFullYear();
 document.getElementById('endYear').textContent = END_YEAR;
 const YEARS = Array.from({length: END_YEAR - 1951 + 1}, (_, i) => 1951 + i);
+const CHUNK_SIZE = 5;
+
+// Distinct colours for up to 5 year lines
+const YEAR_COLORS = [
+  'rgba(192,83,62,1)',
+  'rgba(47,111,143,1)',
+  'rgba(232,162,60,1)',
+  'rgba(120,80,160,1)',
+  'rgba(62,140,100,1)',
+];
 
 function parseCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -99,8 +119,10 @@ async function loadAll() {
       .then(r => r.ok ? r.text() : null).catch(() => null);
   }));
 
-  // monthlyTotals[month][year] = total precip for that month/year (or null)
+  // monthlyTotals[month][year] = total mm for that month/year (null if data missing)
+  // yearMonthly[year][month]   = same data, transposed for the per-year chart
   const monthlyTotals = Array.from({length: 12}, () => ({}));
+  const yearMonthly   = {};
 
   let loaded = 0;
   for (let yi = 0; yi < YEARS.length; yi++) {
@@ -108,7 +130,7 @@ async function loadAll() {
     if (!text) continue;
     loaded++;
     const year = YEARS[yi];
-    const monthSums = Array(12).fill(0);
+    const monthSums  = Array(12).fill(0);
     const monthValid = Array(12).fill(true);
 
     for (const row of parseCSV(text)) {
@@ -119,13 +141,16 @@ async function loadAll() {
         monthValid[month] = false;
       }
     }
+    yearMonthly[year] = [];
     for (let m = 0; m < 12; m++) {
-      monthlyTotals[m][year] = monthValid[m] ? monthSums[m] : null;
+      const val = monthValid[m] ? +monthSums[m].toFixed(1) : null;
+      monthlyTotals[m][year] = val;
+      yearMonthly[year][m]   = val;
     }
   }
 
   document.getElementById('status').textContent = `Loaded ${loaded} years of data.`;
-  return monthlyTotals;
+  return { monthlyTotals, yearMonthly };
 }
 
 function stats(values) {
@@ -138,8 +163,9 @@ function stats(values) {
 }
 
 (async () => {
-  const monthlyTotals = await loadAll();
+  const { monthlyTotals, yearMonthly } = await loadAll();
 
+  // ── Chart 1: climatological average ──────────────────────────────────────
   const monthStats = monthlyTotals.map(yearMap => stats(Object.values(yearMap)));
   const means  = monthStats.map(({mean}) => mean !== null ? +mean.toFixed(1) : null);
   const upper1 = monthStats.map(({mean, std}) => mean !== null ? +(mean + std).toFixed(1) : null);
@@ -150,51 +176,70 @@ function stats(values) {
     data: {
       labels: MONTH_NAMES,
       datasets: [
-        {
-          label: 'Mean (mm)',
-          data: means,
-          backgroundColor: 'rgba(91,122,74,0.75)',
-          borderColor: 'rgba(91,122,74,1)',
-          borderWidth: 1,
-          order: 2,
-        },
-        {
-          label: '+1σ',
-          data: upper1,
-          type: 'line',
-          borderColor: 'rgba(91,122,74,0.5)',
-          backgroundColor: 'transparent',
-          borderWidth: 1.5,
-          borderDash: [4, 3],
-          pointRadius: 3,
-          pointStyle: 'dash',
-          order: 1,
-        },
-        {
-          label: '−1σ',
-          data: lower1,
-          type: 'line',
-          borderColor: 'rgba(91,122,74,0.5)',
-          backgroundColor: 'transparent',
-          borderWidth: 1.5,
-          borderDash: [4, 3],
-          pointRadius: 3,
-          pointStyle: 'dash',
-          order: 1,
-        },
+        { label: 'Mean (mm)', data: means,  backgroundColor: 'rgba(91,122,74,0.75)', borderColor: 'rgba(91,122,74,1)', borderWidth: 1, order: 2 },
+        { label: '+1σ', data: upper1, type: 'line', borderColor: 'rgba(91,122,74,0.5)', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4,3], pointRadius: 3, pointStyle: 'dash', order: 1 },
+        { label: '−1σ', data: lower1, type: 'line', borderColor: 'rgba(91,122,74,0.5)', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4,3], pointRadius: 3, pointStyle: 'dash', order: 1 },
       ]
     },
     options: {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
-      scales: {
-        y: {
-          title: { display: true, text: 'mm' },
-          beginAtZero: true,
-        }
-      }
+      scales: { y: { title: { display: true, text: 'mm' }, beginAtZero: true } }
     }
   });
+
+  // ── Chart 2: per-year monthly totals (5 years at a time) ─────────────────
+  // Reference datasets (σ bands) appended to every render
+  const refDatasets = [
+    { label: 'Mean',  data: means,  type: 'line', borderColor: 'rgba(26,35,48,0.35)', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [6,4], pointRadius: 0, order: 10 },
+    { label: '+1σ',  data: upper1, type: 'line', borderColor: 'rgba(26,35,48,0.2)',  backgroundColor: 'transparent', borderWidth: 1,   borderDash: [4,3], pointRadius: 0, order: 10 },
+    { label: '−1σ',  data: lower1, type: 'line', borderColor: 'rgba(26,35,48,0.2)',  backgroundColor: 'transparent', borderWidth: 1,   borderDash: [4,3], pointRadius: 0, order: 10 },
+  ];
+
+  // Default to most-recent chunk
+  let chunkStart = Math.max(0, YEARS.length - CHUNK_SIZE);
+
+  function yearDatasets(start) {
+    return YEARS.slice(start, start + CHUNK_SIZE).map((year, i) => ({
+      label: String(year),
+      data: yearMonthly[year] ?? Array(12).fill(null),
+      borderColor: YEAR_COLORS[i],
+      backgroundColor: 'transparent',
+      type: 'line',
+      borderWidth: 2,
+      tension: 0.3,
+      pointRadius: 4,
+      order: i,
+    }));
+  }
+
+  const yearlyChart = new Chart(document.getElementById('yearlyChart'), {
+    type: 'line',
+    data: { labels: MONTH_NAMES, datasets: [...yearDatasets(chunkStart), ...refDatasets] },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { filter: item => item.datasetIndex < CHUNK_SIZE } } },
+      scales: { y: { title: { display: true, text: 'mm' }, beginAtZero: true } }
+    }
+  });
+
+  function updateChunk(newStart) {
+    chunkStart = Math.max(0, Math.min(newStart, YEARS.length - CHUNK_SIZE));
+    const chunkYears = YEARS.slice(chunkStart, chunkStart + CHUNK_SIZE);
+    yearlyChart.data.datasets = [...yearDatasets(chunkStart), ...refDatasets];
+    yearlyChart.update();
+
+    document.getElementById('chunkLabel').textContent =
+      `${chunkYears[0]}–${chunkYears[chunkYears.length - 1]}`;
+    document.getElementById('chunkPrev').disabled = chunkStart === 0;
+    document.getElementById('chunkNext').disabled = chunkStart + CHUNK_SIZE >= YEARS.length;
+  }
+
+  document.getElementById('chunkPrev').addEventListener('click', () => updateChunk(chunkStart - CHUNK_SIZE));
+  document.getElementById('chunkNext').addEventListener('click', () => updateChunk(chunkStart + CHUNK_SIZE));
+
+  updateChunk(chunkStart); // initialise label and button states
 })();
 </script>
 </body>
