@@ -79,7 +79,7 @@
   </div>
 
   <div class="chart-card">
-    <h2>Full time series · monthly totals and 3-month average (mm)</h2>
+    <h2>Full time series · quarterly totals and 3-quarter average (mm)</h2>
     <canvas id="timeSeriesChart" height="260"></canvas>
   </div>
 </main>
@@ -286,38 +286,40 @@ function stats(values) {
 
   updateChunk(chunkStart); // initialise label and button states
 
-  // ── Chart 3: full time series with 3-month centred average ───────────────
-  const tsLabels = [];
-  const tsMonthly = [];
+  // ── Chart 3: full time series · quarterly totals + 3-quarter average ────
+  const tsQLabels = [];
+  const tsQuarterly = [];
   for (const year of YEARS) {
-    for (let m = 0; m < 12; m++) {
-      tsLabels.push(`${MONTH_NAMES[m]} ${year}`);
-      tsMonthly.push(yearMonthly[year]?.[m] ?? null);
+    for (let q = 0; q < 4; q++) {
+      const vals = [0, 1, 2].map(o => yearMonthly[year]?.[q * 3 + o] ?? null);
+      const valid = vals.filter(v => v !== null);
+      tsQLabels.push(`Q${q + 1} ${year}`);
+      tsQuarterly.push(valid.length > 0 ? +valid.reduce((a, b) => a + b, 0).toFixed(1) : null);
     }
   }
 
-  const ts3mo = tsMonthly.map((_, i) => {
-    if (i === 0 || i === tsMonthly.length - 1) return null;
-    const a = tsMonthly[i - 1], b = tsMonthly[i], c = tsMonthly[i + 1];
+  const tsQ3avg = tsQuarterly.map((_, i) => {
+    if (i === 0 || i === tsQuarterly.length - 1) return null;
+    const a = tsQuarterly[i - 1], b = tsQuarterly[i], c = tsQuarterly[i + 1];
     return (a !== null && b !== null && c !== null) ? +((a + b + c) / 3).toFixed(1) : null;
   });
 
   new Chart(document.getElementById('timeSeriesChart'), {
     type: 'bar',
     data: {
-      labels: tsLabels,
+      labels: tsQLabels,
       datasets: [
         {
-          label: 'Monthly total (mm)',
-          data: tsMonthly,
+          label: 'Quarterly total (mm)',
+          data: tsQuarterly,
           backgroundColor: 'rgba(91,122,74,0.35)',
           borderColor: 'transparent',
           borderWidth: 0,
           order: 2,
         },
         {
-          label: '3-month average (mm)',
-          data: ts3mo,
+          label: '3-quarter average (mm)',
+          data: tsQ3avg,
           type: 'line',
           borderColor: 'rgba(47,111,143,1)',
           backgroundColor: 'transparent',
@@ -337,7 +339,7 @@ function stats(values) {
           ticks: {
             maxRotation: 0,
             autoSkip: false,
-            callback: (_, i) => tsLabels[i]?.startsWith('Jan') ? tsLabels[i].slice(4) : '',
+            callback: (_, i) => tsQLabels[i]?.startsWith('Q1') ? tsQLabels[i].slice(3) : '',
           }
         },
         y: { title: { display: true, text: 'mm' }, beginAtZero: true }
