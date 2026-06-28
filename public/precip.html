@@ -286,7 +286,7 @@ function stats(values) {
 
   updateChunk(chunkStart); // initialise label and button states
 
-  // ── Chart 3: full time series · quarterly totals + 3-quarter average ────
+  // ── Chart 3: full time series · quarterly totals + 3-quarter avg + ONI ──
   const tsQLabels = [];
   const tsQuarterly = [];
   for (const year of YEARS) {
@@ -304,32 +304,74 @@ function stats(values) {
     return (a !== null && b !== null && c !== null) ? +((a + b + c) / 3).toFixed(1) : null;
   });
 
+  // Load ONI and align to tsQLabels
+  let oniByKey = {};
+  try {
+    const oniText = await fetch('data/oni.csv').then(r => r.ok ? r.text() : null);
+    if (oniText) {
+      const lines = oniText.split(/\r?\n/).filter(l => l.trim());
+      const hdr = lines[0].split(',').map(h => h.trim());
+      const yi = hdr.indexOf('year'), qi = hdr.indexOf('quarter'), oi = hdr.indexOf('oni');
+      for (const line of lines.slice(1)) {
+        const cols = line.split(',');
+        const key = `Q${cols[qi]?.trim()} ${cols[yi]?.trim()}`;
+        const v = parseFloat(cols[oi]);
+        if (isFinite(v)) oniByKey[key] = v;
+      }
+    }
+  } catch (_) {}
+
+  const tsONI = tsQLabels.map(lbl => oniByKey[lbl] ?? null);
+  const hasONI = tsONI.some(v => v !== null);
+
+  const datasets = [
+    {
+      label: 'Quarterly total (mm)',
+      data: tsQuarterly,
+      backgroundColor: 'rgba(91,122,74,0.35)',
+      borderColor: 'transparent',
+      borderWidth: 0,
+      yAxisID: 'y',
+      order: 3,
+    },
+    {
+      label: '3-quarter average (mm)',
+      data: tsQ3avg,
+      type: 'line',
+      borderColor: 'rgba(47,111,143,1)',
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.3,
+      yAxisID: 'y',
+      order: 2,
+    },
+  ];
+
+  if (hasONI) {
+    datasets.push({
+      label: 'ONI (°C)',
+      data: tsONI,
+      type: 'line',
+      borderWidth: 1.5,
+      pointRadius: 0,
+      tension: 0.3,
+      yAxisID: 'yONI',
+      order: 1,
+      segment: {
+        borderColor: ctx => {
+          const v = ctx.p1.parsed.y;
+          if (v >=  0.5) return 'rgba(192,83,62,0.85)';
+          if (v <= -0.5) return 'rgba(47,111,143,0.85)';
+          return 'rgba(160,160,160,0.6)';
+        },
+      },
+    });
+  }
+
   new Chart(document.getElementById('timeSeriesChart'), {
     type: 'bar',
-    data: {
-      labels: tsQLabels,
-      datasets: [
-        {
-          label: 'Quarterly total (mm)',
-          data: tsQuarterly,
-          backgroundColor: 'rgba(91,122,74,0.35)',
-          borderColor: 'transparent',
-          borderWidth: 0,
-          order: 2,
-        },
-        {
-          label: '3-quarter average (mm)',
-          data: tsQ3avg,
-          type: 'line',
-          borderColor: 'rgba(47,111,143,1)',
-          backgroundColor: 'transparent',
-          borderWidth: 2,
-          pointRadius: 0,
-          tension: 0.3,
-          order: 1,
-        },
-      ]
-    },
+    data: { labels: tsQLabels, datasets },
     options: {
       responsive: true,
       animation: false,
@@ -342,7 +384,16 @@ function stats(values) {
             callback: (_, i) => tsQLabels[i]?.startsWith('Q1') ? tsQLabels[i].slice(3) : '',
           }
         },
-        y: { title: { display: true, text: 'mm' }, beginAtZero: true }
+        y: { title: { display: true, text: 'mm' }, beginAtZero: true },
+        ...(hasONI ? {
+          yONI: {
+            position: 'right',
+            title: { display: true, text: 'ONI (°C)' },
+            min: -3, max: 3,
+            grid: { drawOnChartArea: false },
+            ticks: { callback: v => v.toFixed(1) },
+          }
+        } : {}),
       }
     }
   });
