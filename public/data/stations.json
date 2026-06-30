@@ -1,0 +1,11 @@
+{
+  "fredericton": {
+    "name": "Fredericton Airport",
+    "province": "NB",
+    "startYear": 1951,
+    "segments": [
+      { "id": 6157, "until": 2010 },
+      { "id": 48568, "from": 2010 }
+    ]
+  }
+}

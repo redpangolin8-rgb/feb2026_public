@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Fredericton Airport — Climate</title>
+<script src="js/stations.js"></script>
 <style>
   :root {
     --ink: #1a2330;
@@ -104,8 +105,8 @@
 
 <header>
   <h1>Fredericton Airport</h1>
-  <p>Historical daily weather data and climate analysis · 1951–<span id="endYear"></span></p>
-  <span class="station-tag">Stations 6157 / 48568 · ECCC</span>
+  <p>Historical daily weather data and climate analysis · <span id="startYear"></span>–<span id="endYear"></span></p>
+  <span class="station-tag" id="stationTag">Loading…</span>
 </header>
 
 <main>
@@ -138,14 +139,30 @@
   </a>
 </main>
 
-<footer>
-  Data source: Environment and Climate Change Canada (ECCC) · Station 6157 (1951–2010) and 48568 (2010–<span id="endYearFooter"></span>)
+<footer id="footerText">
+  Data source: Environment and Climate Change Canada (ECCC)
 </footer>
 
 <script>
+(async () => {
   const y = new Date().getFullYear();
   document.getElementById('endYear').textContent = y;
-  document.getElementById('endYearFooter').textContent = y;
+
+  const stations = await loadStations();
+  const defaultKey = currentStationKey(stations);
+  const cfg = stations[defaultKey];
+  document.getElementById('startYear').textContent = cfg.startYear;
+  document.getElementById('stationTag').textContent = `${stationLabel(cfg)} · ECCC`;
+
+  const segLines = Object.values(stations).flatMap(c => c.segments.map(seg => {
+    const range = seg.from !== undefined && seg.until !== undefined ? `${seg.from}–${seg.until - 1}`
+                : seg.from !== undefined ? `${seg.from}–${y}`
+                : seg.until !== undefined ? `${c.startYear}–${seg.until - 1}` : `${c.startYear}–${y}`;
+    return `Station ${seg.id} (${range})`;
+  }));
+  document.getElementById('footerText').textContent =
+    `Data source: Environment and Climate Change Canada (ECCC) · ${segLines.join(', ')}`;
+})();
 </script>
 </body>
 </html>

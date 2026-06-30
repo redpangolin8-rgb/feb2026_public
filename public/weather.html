@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Fredericton Airport — Daily Weather History</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="js/stations.js"></script>
 <style>
   :root {
     --ink: #1a2330;
@@ -129,7 +130,7 @@
 <header>
   <h1>Daily Weather History</h1>
   <p>Max / min temperature and precipitation</p>
-  <span class="station-tag">Fredericton Airport · Station ID 6157 / 48568</span>
+  <span class="station-tag" id="stationTag">Loading…</span>
   <nav style="margin-top:10px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:0.8rem;">
     <a href="index.html" style="color:var(--ink)">← Home</a>
     <a href="stats.html" style="color:var(--ink);margin-left:16px">Climate statistics →</a>
@@ -141,20 +142,20 @@
 <main>
   <div class="controls">
     <div class="field">
+      <label for="locationSelect">Location</label>
+      <select id="locationSelect" style="font-family:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:3px;font-size:0.9rem;"></select>
+    </div>
+    <div class="field">
       <label for="localYear">Year</label>
       <div style="display:flex;gap:4px;align-items:center">
         <button id="yearPrev" class="secondary" style="padding:6px 10px;font-size:1rem">&#8249;</button>
-        <input type="number" id="localYear" value="2025" min="1951" max="2030" style="width:80px">
+        <input type="number" id="localYear" style="width:80px">
         <button id="yearNext" class="secondary" style="padding:6px 10px;font-size:1rem">&#8250;</button>
       </div>
     </div>
     <div class="field">
-      <label for="stationSelect">Station</label>
-      <select id="stationSelect" style="font-family:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:3px;font-size:0.9rem;">
-        <option value="auto">Auto</option>
-        <option value="6157">6157 (2000–2009)</option>
-        <option value="48568">48568 (2010–present)</option>
-      </select>
+      <label for="stationSelect">Raw station ID</label>
+      <select id="stationSelect" style="font-family:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:3px;font-size:0.9rem;"></select>
     </div>
     <button id="localBtn">Load saved data</button>
     <div class="field">
@@ -185,7 +186,7 @@
   </div>
 
   <p class="status" id="rainSnowNote" style="display:none">
-    Rainfall and snowfall breakdown not available for this station/year — ECCC only reports total precipitation for station 48568 (2010–present).
+    Rainfall and snowfall breakdown not available for this station/year — some ECCC stations only report total precipitation.
   </p>
 
   <div class="stats-row" id="stats"></div>
@@ -383,10 +384,12 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
   reader.readAsText(file);
 });
 
+let activeCfg = null;
+
 function stationForYear(year) {
   const sel = document.getElementById('stationSelect').value;
   if (sel !== 'auto') return sel;
-  return parseInt(year) < 2010 ? '6157' : '48568';
+  return stationIdForYear(activeCfg, parseInt(year));
 }
 
 async function loadYear(year) {
@@ -417,6 +420,42 @@ document.getElementById('yearNext').addEventListener('click', () => {
 document.getElementById('localYear').addEventListener('change', (e) => loadYear(e.target.value));
 document.getElementById('localBtn').addEventListener('click', () => loadYear(document.getElementById('localYear').value));
 
+function populateRawStationSelect(cfg) {
+  const sel = document.getElementById('stationSelect');
+  sel.textContent = '';
+  const autoOpt = document.createElement('option');
+  autoOpt.value = 'auto';
+  autoOpt.textContent = 'Auto';
+  sel.appendChild(autoOpt);
+  for (const seg of cfg.segments) {
+    const opt = document.createElement('option');
+    opt.value = String(seg.id);
+    const range = seg.from !== undefined && seg.until !== undefined ? `${seg.from}–${seg.until - 1}`
+                : seg.from !== undefined ? `${seg.from}–present`
+                : seg.until !== undefined ? `…–${seg.until - 1}` : '';
+    opt.textContent = range ? `${seg.id} (${range})` : String(seg.id);
+    sel.appendChild(opt);
+  }
+}
+
+(async () => {
+  const stations = await loadStations();
+  const activeKey = currentStationKey(stations);
+  activeCfg = stations[activeKey];
+
+  initStationNav(document.getElementById('locationSelect'), stations, activeKey);
+  populateRawStationSelect(activeCfg);
+  document.getElementById('stationTag').textContent = `${activeCfg.name} · ${stationLabel(activeCfg)}`;
+  document.title = `${activeCfg.name} — Daily Weather History`;
+
+  const yearEl = document.getElementById('localYear');
+  const thisYear = new Date().getFullYear();
+  yearEl.min = activeCfg.startYear;
+  yearEl.max = thisYear;
+  yearEl.value = thisYear;
+
+  loadYear(yearEl.value);
+})();
 </script>
 </body>
 </html>

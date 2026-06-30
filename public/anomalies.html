@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Fredericton Airport — Climate Anomalies</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="js/stations.js"></script>
 <style>
   :root {
     --ink: #1a2330;
@@ -49,8 +50,9 @@
 
 <header>
   <h1>Climate Anomalies</h1>
-  <p>Days per year outside the ±7-day windowed climatological mean±1σ and mean±2σ thresholds · 1951–<span id="endYear"></span></p>
-  <span class="station-tag">Fredericton Airport · Stations 6157 / 48568</span>
+  <p>Days per year outside the ±7-day windowed climatological mean±1σ and mean±2σ thresholds · <span id="startYear"></span>–<span id="endYear"></span></p>
+  <span class="station-tag" id="stationTag">Loading…</span>
+  <select id="locationSelect" style="margin-left:10px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:0.78rem;padding:3px 8px;border:1px solid var(--ink);border-radius:2px;"></select>
   <nav>
     <a href="index.html">← Home</a>
     <a href="weather.html" style="margin-left:16px">Daily weather history</a>
@@ -76,9 +78,7 @@
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTH_DAYS  = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 const WINDOW = 7;
-const END_YEAR = new Date().getFullYear();
-document.getElementById('endYear').textContent = END_YEAR;
-const YEARS  = Array.from({length: END_YEAR - 1951 + 1}, (_, i) => 1951 + i);
+let YEARS;
 
 function buildDayKeys() {
   const keys = [];
@@ -113,11 +113,10 @@ function parseCSV(text) {
   return rows;
 }
 
-async function loadAll() {
+async function loadAll(cfg) {
   document.getElementById('status').textContent = `Loading ${YEARS.length} data files…`;
   const texts = await Promise.all(YEARS.map(year => {
-    const station = year < 2010 ? 6157 : 48568;
-    return fetch(`data/weather-${station}-${year}.csv`)
+    return fetch(weatherDataURL(cfg, year))
       .then(r => r.ok ? r.text() : null).catch(() => null);
   }));
 
@@ -196,7 +195,20 @@ function makeAnomalyChart(canvasId, datasets) {
 }
 
 (async () => {
-  const { byMMDD, byYear } = await loadAll();
+  const stations = await loadStations();
+  const activeKey = currentStationKey(stations);
+  const cfg = stations[activeKey];
+
+  initStationNav(document.getElementById('locationSelect'), stations, activeKey);
+  document.getElementById('stationTag').textContent = `${cfg.name} · ${stationLabel(cfg)}`;
+  document.title = `${cfg.name} — Climate Anomalies`;
+
+  const endYear = new Date().getFullYear();
+  document.getElementById('startYear').textContent = cfg.startYear;
+  document.getElementById('endYear').textContent = endYear;
+  YEARS = Array.from({length: endYear - cfg.startYear + 1}, (_, i) => cfg.startYear + i);
+
+  const { byMMDD, byYear } = await loadAll(cfg);
 
   // Max temp: days above mean+1σ / mean+2σ
   const { thresh1: maxT1, thresh2: maxT2 } = buildThresholds(byMMDD, 'max', +1);
