@@ -43,6 +43,14 @@
     font-family: 'Helvetica Neue', Arial, sans-serif;
     text-transform: uppercase; letter-spacing: 0.08em; color: #555;
   }
+  .ts-toggle {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background: #fff; color: var(--ink);
+    border: 1px solid var(--line); padding: 5px 13px;
+    border-radius: 3px; cursor: pointer; font-size: 0.82rem;
+    transition: opacity 0.15s;
+  }
+  .ts-toggle[data-active="false"] { opacity: 0.38; }
 </style>
 </head>
 <body>
@@ -80,6 +88,14 @@
 
   <div class="chart-card">
     <h2>Full time series · quarterly totals and 3-quarter average (mm)</h2>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <button id="toggle3qAvg" class="ts-toggle" data-active="true">
+        <span style="display:inline-block;width:14px;height:3px;background:rgba(47,111,143,1);vertical-align:middle;margin-right:5px;border-radius:1px;"></span>3-quarter avg
+      </button>
+      <button id="toggleONI" class="ts-toggle" data-active="true" style="display:none;">
+        <span style="display:inline-block;width:14px;height:3px;background:rgba(192,83,62,0.85);vertical-align:middle;margin-right:5px;border-radius:1px;"></span>ONI
+      </button>
+    </div>
     <canvas id="timeSeriesChart" height="260"></canvas>
   </div>
 </main>
@@ -369,7 +385,7 @@ function stats(values) {
     });
   }
 
-  new Chart(document.getElementById('timeSeriesChart'), {
+  const tsChart = new Chart(document.getElementById('timeSeriesChart'), {
     type: 'bar',
     data: { labels: tsQLabels, datasets },
     options: {
@@ -397,6 +413,22 @@ function stats(values) {
       }
     }
   });
+
+  // Toggle buttons — dataset indices: 0=quarterly bars, 1=3q avg, 2=ONI
+  function wireToggle(btnId, datasetIdx) {
+    const btn = document.getElementById(btnId);
+    btn.addEventListener('click', () => {
+      const nowVisible = !tsChart.isDatasetVisible(datasetIdx);
+      tsChart.setDatasetVisibility(datasetIdx, nowVisible);
+      tsChart.update();
+      btn.dataset.active = nowVisible ? 'true' : 'false';
+    });
+  }
+  wireToggle('toggle3qAvg', 1);
+  if (hasONI) {
+    document.getElementById('toggleONI').style.display = '';
+    wireToggle('toggleONI', 2);
+  }
 })();
 </script>
 </body>
