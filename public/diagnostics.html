@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Station Data Diagnostics</title>
+<script src="js/stations.js"></script>
+<style>
+  :root {
+    --ink: #1a2330;
+    --paper: #f6f4ee;
+    --line: #d8d2c4;
+    --ok: #4a7a4a;
+    --bad: #a83e3e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  header { padding: 28px 24px 18px; border-bottom: 2px solid var(--ink); }
+  header h1 { margin: 0; font-size: 1.8rem; letter-spacing: 0.02em; }
+  header p { margin: 6px 0 0; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem; color: #555; }
+  header nav { margin-top: 10px; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem; }
+  header nav a { color: var(--ink); margin-right: 16px; }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px; }
+  .status {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem;
+    color: #777; margin: 4px 0 18px; min-height: 1.2em;
+  }
+  table {
+    width: 100%; border-collapse: collapse;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem;
+    background: #fff; border: 1px solid var(--line); border-radius: 4px; overflow: hidden;
+  }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--line); }
+  th { background: #efece3; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.06em; color: #555; }
+  tr:last-child td { border-bottom: none; }
+  .badge {
+    display: inline-block; padding: 2px 9px; border-radius: 10px;
+    font-size: 0.75rem; font-weight: 600; color: #fff;
+  }
+  .badge.ok  { background: var(--ok); }
+  .badge.bad { background: var(--bad); }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.8rem; color: #444; }
+  .card {
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 4px; padding: 16px; margin-bottom: 20px; overflow-x: auto;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Station Data Diagnostics</h1>
+  <p>Confirms each registered station's data files are being fetched and parse correctly.</p>
+  <nav>
+    <a href="index.html">← Home</a>
+  </nav>
+</header>
+
+<main>
+  <div class="status" id="status">Loading stations.json…</div>
+  <div class="card">
+    <table id="resultsTable">
+      <thead>
+        <tr>
+          <th>Location</th>
+          <th>Station ID</th>
+          <th>Year tested</th>
+          <th>Status</th>
+          <th>Rows</th>
+          <th>Date range in file</th>
+          <th>Fields detected</th>
+        </tr>
+      </thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const header = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+  const dateIdx   = header.findIndex(h => /date\/time|date$/i.test(h));
+  const maxIdx    = header.findIndex(h => /max temp/i.test(h));
+  const minIdx    = header.findIndex(h => /min temp/i.test(h));
+  const precipIdx = header.findIndex(h => /total precip/i.test(h));
+  const rainIdx   = header.findIndex(h => /total rain/i.test(h));
+  const snowIdx   = header.findIndex(h => /total snow/i.test(h));
+  if (dateIdx === -1) return { rows: [], fields: [] };
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.replace(/"/g,'').trim());
+    if (cols.length < header.length) continue;
+    const date = cols[dateIdx];
+    if (!date) continue;
+    rows.push({
+      date,
+      max:    maxIdx    !== -1 ? parseFloat(cols[maxIdx])    : NaN,
+      min:    minIdx    !== -1 ? parseFloat(cols[minIdx])    : NaN,
+      precip: precipIdx !== -1 ? parseFloat(cols[precipIdx]) : NaN,
+      rain:   rainIdx   !== -1 ? parseFloat(cols[rainIdx])   : NaN,
+      snow:   snowIdx   !== -1 ? parseFloat(cols[snowIdx])   : NaN,
+    });
+  }
+  const fields = [];
+  if (maxIdx    !== -1) fields.push('max temp');
+  if (minIdx    !== -1) fields.push('min temp');
+  if (precipIdx !== -1) fields.push('precip');
+  if (rainIdx   !== -1 && rows.some(r => isFinite(r.rain))) fields.push('rain');
+  if (snowIdx   !== -1 && rows.some(r => isFinite(r.snow))) fields.push('snow');
+  return { rows, fields };
+}
+
+function addRow(tbody, cells) {
+  const tr = document.createElement('tr');
+  for (const c of cells) {
+    const td = document.createElement('td');
+    if (c instanceof Node) td.appendChild(c); else td.innerHTML = c;
+    tr.appendChild(td);
+  }
+  tbody.appendChild(tr);
+}
+
+function badge(ok, label) {
+  const span = document.createElement('span');
+  span.className = 'badge ' + (ok ? 'ok' : 'bad');
+  span.textContent = label;
+  return span;
+}
+
+async function testYear(cfg, year) {
+  const stationId = stationIdForYear(cfg, year);
+  const url = weatherDataURL(cfg, year);
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return { stationId, url, ok: false, reason: `HTTP ${resp.status}` };
+    const text = await resp.text();
+    const { rows, fields } = parseCSV(text);
+    if (!rows.length) return { stationId, url, ok: false, reason: 'Parsed 0 rows' };
+    const dates = rows.map(r => r.date).sort();
+    return {
+      stationId, url, ok: true,
+      rowCount: rows.length,
+      range: `${dates[0]} → ${dates[dates.length - 1]}`,
+      fields,
+    };
+  } catch (e) {
+    return { stationId, url, ok: false, reason: e.message };
+  }
+}
+
+(async () => {
+  const stations = await loadStations();
+  const tbody = document.getElementById('resultsBody');
+  const thisYear = new Date().getFullYear();
+  document.getElementById('status').textContent = `Testing ${Object.keys(stations).length} location(s)…`;
+
+  let okCount = 0, total = 0;
+
+  for (const [key, cfg] of Object.entries(stations)) {
+    // Test the most recent year and the year the current segment started (if different),
+    // so both "is the cron job current" and "does the historical start year exist" are covered.
+    const yearsToTest = [...new Set([thisYear, thisYear - 1, cfg.startYear])];
+
+    for (const year of yearsToTest) {
+      total++;
+      const result = await testYear(cfg, year);
+      if (result.ok) okCount++;
+
+      const link = document.createElement('a');
+      link.href = result.url;
+      link.textContent = result.url;
+      link.className = 'mono';
+
+      addRow(tbody, [
+        `${cfg.name} <span style="color:#999">(${key})</span>`,
+        `<span class="mono">${result.stationId}</span>`,
+        year,
+        badge(result.ok, result.ok ? 'OK' : 'MISSING').outerHTML,
+        result.ok ? result.rowCount : '—',
+        result.ok ? result.range : `<span style="color:#999">${result.reason}</span>`,
+        result.ok ? result.fields.join(', ') : '—',
+      ]);
+    }
+  }
+
+  document.getElementById('status').textContent =
+    `${okCount}/${total} checks passed.`;
+})();
+</script>
+</body>
+</html>

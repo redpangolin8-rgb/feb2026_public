@@ -7,5 +7,29 @@
       { "id": 6157, "until": 2010 },
       { "id": 48568, "from": 2010 }
     ]
+  },
+  "creston": {
+    "name": "Creston",
+    "province": "BC",
+    "startYear": 1912,
+    "segments": [
+      { "id": 1111 }
+    ]
+  },
+  "lister": {
+    "name": "Lister",
+    "province": "BC",
+    "startYear": 1956,
+    "segments": [
+      { "id": 1130 }
+    ]
+  },
+  "creston_campbell": {
+    "name": "Creston Campbell Scientific",
+    "province": "BC",
+    "startYear": 1993,
+    "segments": [
+      { "id": 6838 }
+    ]
   }
 }
