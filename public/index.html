@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fredericton Airport — Climate</title>
+<title>Climate Data Explorer</title>
 <script src="js/stations.js"></script>
 <style>
   :root {
@@ -104,7 +104,7 @@
 <body>
 
 <header>
-  <h1>Fredericton Airport</h1>
+  <h1>Climate Data Explorer</h1>
   <p>Historical daily weather data and climate analysis · <span id="startYear"></span>–<span id="endYear"></span></p>
   <span class="station-tag" id="stationTag">Loading…</span>
 </header>
@@ -137,6 +137,13 @@
     <p>Days per year where daily max temperature exceeded the climatological mean+1σ threshold.</p>
     <span class="card-arrow">View →</span>
   </a>
+
+  <a class="card" href="compare.html">
+    <div class="card-label">Comparison</div>
+    <h2>Station Comparison</h2>
+    <p>Overlay two stations' climatology and biases side by side to compare trends between locations.</p>
+    <span class="card-arrow">View →</span>
+  </a>
 </main>
 
 <footer>
@@ -150,12 +157,13 @@
   document.getElementById('endYear').textContent = y;
 
   const stations = await loadStations();
-  const defaultKey = currentStationKey(stations);
-  const cfg = stations[defaultKey];
-  document.getElementById('startYear').textContent = cfg.startYear;
-  document.getElementById('stationTag').textContent = `${stationLabel(cfg)} · ECCC`;
+  const cfgs = Object.values(stations);
+  const minStartYear = Math.min(...cfgs.map(c => c.startYear));
+  document.getElementById('startYear').textContent = minStartYear;
+  document.getElementById('stationTag').textContent =
+    `${cfgs.length} location${cfgs.length === 1 ? '' : 's'} · ECCC`;
 
-  const segLines = Object.values(stations).flatMap(c => c.segments.map(seg => {
+  const segLines = cfgs.flatMap(c => c.segments.map(seg => {
     const range = seg.from !== undefined && seg.until !== undefined ? `${seg.from}–${seg.until - 1}`
                 : seg.from !== undefined ? `${seg.from}–${y}`
                 : seg.until !== undefined ? `${c.startYear}–${seg.until - 1}` : `${c.startYear}–${y}`;

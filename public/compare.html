@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Station Comparison — Climate Statistics</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="js/stations.js"></script>
+<style>
+  :root {
+    --ink: #1a2330;
+    --paper: #f6f4ee;
+    --line: #d8d2c4;
+    --accent: #e8a23c;
+    --a: #c0533e;
+    --b: #7850a0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  header { padding: 28px 24px 18px; border-bottom: 2px solid var(--ink); }
+  header h1 { margin: 0; font-size: 1.8rem; letter-spacing: 0.02em; }
+  header p { margin: 6px 0 0; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem; color: #555; }
+  header nav { margin-top: 10px; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem; }
+  header nav a { color: var(--ink); margin-right: 16px; }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px; }
+  .picker-row {
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: end;
+    background: #fff; border: 1px solid var(--line); padding: 16px;
+    border-radius: 4px; margin-bottom: 20px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+  }
+  .picker { display: flex; flex-direction: column; gap: 4px; }
+  .picker label {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+  .picker select {
+    font-family: inherit; padding: 6px 8px; border: 1px solid var(--line);
+    border-radius: 3px; font-size: 0.9rem; min-width: 220px;
+  }
+  .status {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem;
+    color: #777; margin: 4px 0 18px; min-height: 1.2em;
+  }
+  .chart-card {
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 4px; padding: 16px; margin-bottom: 20px;
+  }
+  .chart-card h2 {
+    font-size: 1rem; margin: 0 0 12px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.08em; color: #555;
+  }
+  table.summary {
+    width: 100%; border-collapse: collapse;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem;
+  }
+  table.summary th, table.summary td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--line); }
+  table.summary th:first-child, table.summary td:first-child { text-align: left; }
+  table.summary th { color: #555; font-weight: 600; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.06em; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Station Comparison</h1>
+  <p>Same climatological mean ±1σ/±2σ statistics for two stations overlaid, to compare trends and biases · ±7-day window</p>
+  <nav>
+    <a href="index.html">← Home</a>
+    <a href="stats.html">Climate statistics</a>
+    <a href="precip.html">Precipitation</a>
+    <a href="anomalies.html">Anomalies</a>
+  </nav>
+</header>
+
+<main>
+  <div class="picker-row">
+    <div class="picker">
+      <label><span class="swatch" style="background:var(--a)"></span>Station A</label>
+      <select id="stationA"></select>
+    </div>
+    <div class="picker">
+      <label><span class="swatch" style="background:var(--b)"></span>Station B</label>
+      <select id="stationB"></select>
+    </div>
+  </div>
+
+  <div class="status" id="status">Loading stations.json…</div>
+
+  <div class="chart-card">
+    <h2>Daily max temp climatology (°C)</h2>
+    <canvas id="maxChart" height="280"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Daily min temp climatology (°C)</h2>
+    <canvas id="minChart" height="280"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Daily precipitation climatology (mm)</h2>
+    <canvas id="precipChart" height="240"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Temperature bias (Station A − Station B, °C)</h2>
+    <canvas id="tempBiasChart" height="220"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Precipitation bias (Station A − Station B, mm)</h2>
+    <canvas id="precipBiasChart" height="220"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Overall summary</h2>
+    <table class="summary" id="summaryTable"></table>
+  </div>
+</main>
+
+<script>
+let maxChart = null, minChart = null, precipChart = null, tempBiasChart = null, precipBiasChart = null;
+
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_DAYS  = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const WINDOW = 7;
+const COLOR_A = '192,83,62';
+const COLOR_B = '120,80,160';
+
+function buildDayKeys() {
+  const keys = [];
+  for (let m = 0; m < 12; m++)
+    for (let d = 1; d <= MONTH_DAYS[m]; d++)
+      keys.push(`${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
+  return keys;
+}
+const DAY_KEYS = buildDayKeys();
+
+const X_TICKS = {
+  autoSkip: false,
+  maxRotation: 0,
+  callback: (_, i) => DAY_KEYS[i]?.endsWith('-01')
+    ? MONTH_NAMES[parseInt(DAY_KEYS[i]) - 1] : '',
+};
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const header = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+  const dateIdx   = header.findIndex(h => /date\/time|date$/i.test(h));
+  const maxIdx    = header.findIndex(h => /max temp/i.test(h));
+  const minIdx    = header.findIndex(h => /min temp/i.test(h));
+  const precipIdx = header.findIndex(h => /total precip/i.test(h));
+  if (dateIdx === -1 || maxIdx === -1 || minIdx === -1) return [];
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.replace(/"/g,'').trim());
+    if (cols.length < header.length) continue;
+    const date   = cols[dateIdx];
+    const max    = parseFloat(cols[maxIdx]);
+    const min    = parseFloat(cols[minIdx]);
+    const precip = precipIdx !== -1 ? parseFloat(cols[precipIdx]) : NaN;
+    if (!date) continue;
+    rows.push({
+      date,
+      max:    isFinite(max)    ? max    : null,
+      min:    isFinite(min)    ? min    : null,
+      precip: isFinite(precip) ? precip : null,
+    });
+  }
+  return rows;
+}
+
+async function loadAll(cfg, label) {
+  const endYear = new Date().getFullYear();
+  const years = Array.from({length: endYear - cfg.startYear + 1}, (_, i) => cfg.startYear + i);
+  const texts = await Promise.all(years.map(year =>
+    fetch(weatherDataURL(cfg, year)).then(r => r.ok ? r.text() : null).catch(() => null)
+  ));
+  const byMMDD = {};
+  let loaded = 0;
+  for (const text of texts) {
+    if (!text) continue;
+    loaded++;
+    for (const row of parseCSV(text)) {
+      const key = row.date.slice(5);
+      if (!byMMDD[key]) byMMDD[key] = { max: [], min: [], precip: [] };
+      if (row.max    !== null) byMMDD[key].max.push(row.max);
+      if (row.min    !== null) byMMDD[key].min.push(row.min);
+      if (row.precip !== null) byMMDD[key].precip.push(row.precip);
+    }
+  }
+  return { byMMDD, loaded, years: years.length };
+}
+
+function stats(values) {
+  if (!values || values.length < 2) return { mean: null, std: null };
+  const n = values.length;
+  const mean = values.reduce((a, b) => a + b, 0) / n;
+  const std  = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1));
+  return { mean, std };
+}
+
+function windowedStats(byMMDD, variable) {
+  const n = DAY_KEYS.length;
+  return Array.from({length: n}, (_, i) => {
+    const vals = [];
+    for (let o = -WINDOW; o <= WINDOW; o++) {
+      const idx = ((i + o) % n + n) % n;
+      vals.push(...(byMMDD[DAY_KEYS[idx]]?.[variable] ?? []));
+    }
+    return stats(vals);
+  });
+}
+
+function fmt(v) { return v !== null ? +v.toFixed(2) : null; }
+
+// Builds the mean/±1σ/±2σ band dataset family for one station, for overlay
+// alongside a second station's family on the same chart. clamp0 keeps the
+// lower precip bounds from going negative.
+function bandDatasets(statsList, rgb, name, dashed, clamp0) {
+  const c0 = v => clamp0 && v !== null ? Math.max(0, v) : v;
+  const means = statsList.map(({mean}) => fmt(mean));
+  const u1 = statsList.map(({mean, std}) => fmt(mean !== null ? mean + std       : null));
+  const l1 = statsList.map(({mean, std}) => fmt(mean !== null ? c0(mean - std)     : null));
+  const u2 = statsList.map(({mean, std}) => fmt(mean !== null ? mean + 2 * std   : null));
+  const l2 = statsList.map(({mean, std}) => fmt(mean !== null ? c0(mean - 2 * std) : null));
+  return [
+    { label: `_u2_${name}`, data: u2, borderColor: 'transparent', backgroundColor: `rgba(${rgb},0.10)`, fill: '+1', pointRadius: 0, tension: 0.3 },
+    { label: `_l2_${name}`, data: l2, borderColor: 'transparent', backgroundColor: 'transparent',        fill: false, pointRadius: 0, tension: 0.3 },
+    { label: `_u1_${name}`, data: u1, borderColor: 'transparent', backgroundColor: `rgba(${rgb},0.18)`, fill: '+1', pointRadius: 0, tension: 0.3 },
+    { label: `_l1_${name}`, data: l1, borderColor: 'transparent', backgroundColor: 'transparent',        fill: false, pointRadius: 0, tension: 0.3 },
+    { label: name, data: means, borderColor: `rgba(${rgb},1)`, backgroundColor: 'transparent', fill: false, pointRadius: 0, tension: 0.3, borderWidth: 2, borderDash: dashed ? [6,3] : [] },
+  ];
+}
+
+function makeChart(canvasId, datasets, yLabel) {
+  return new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: { labels: DAY_KEYS, datasets },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { filter: item => !item.text.startsWith('_') } } },
+      scales: { x: { ticks: X_TICKS }, y: { title: { display: true, text: yLabel } } }
+    }
+  });
+}
+
+function makeBiasChart(canvasId, values, yLabel, rgb) {
+  const zeros = values.map(v => v !== null ? 0 : null);
+  return new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: {
+      labels: DAY_KEYS,
+      datasets: [
+        { label: 'A − B', data: values, borderColor: `rgba(${rgb},1)`, backgroundColor: `rgba(${rgb},0.15)`, fill: 'origin', pointRadius: 0, tension: 0.3, borderWidth: 1.5 },
+        { label: '_zero', data: zeros, borderColor: 'rgba(26,35,48,0.4)', backgroundColor: 'transparent', fill: false, pointRadius: 0, borderWidth: 1, borderDash: [4,3] },
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { filter: item => !item.text.startsWith('_') } } },
+      scales: { x: { ticks: X_TICKS }, y: { title: { display: true, text: yLabel } } }
+    }
+  });
+}
+
+function overallStats(byMMDD, variable) {
+  const all = Object.values(byMMDD).flatMap(d => d[variable] ?? []);
+  return stats(all);
+}
+
+function renderSummary(dataA, dataB, cfgA, cfgB) {
+  const rows = [
+    { label: 'Years of data loaded', a: dataA.loaded, b: dataB.loaded, decimals: 0 },
+    { label: 'Avg daily max temp (°C)', a: overallStats(dataA.byMMDD, 'max').mean, b: overallStats(dataB.byMMDD, 'max').mean, decimals: 2 },
+    { label: 'Avg daily min temp (°C)', a: overallStats(dataA.byMMDD, 'min').mean, b: overallStats(dataB.byMMDD, 'min').mean, decimals: 2 },
+    { label: 'Avg daily precip (mm)',   a: overallStats(dataA.byMMDD, 'precip').mean, b: overallStats(dataB.byMMDD, 'precip').mean, decimals: 2 },
+  ];
+  const table = document.getElementById('summaryTable');
+  table.textContent = '';
+  const thead = table.createTHead();
+  const hrow = thead.insertRow();
+  ['Metric', cfgA.name, cfgB.name, 'A − B'].forEach(h => {
+    const th = document.createElement('th');
+    th.textContent = h;
+    hrow.appendChild(th);
+  });
+  const tbody = table.createTBody();
+  for (const { label, a, b, decimals } of rows) {
+    const row = tbody.insertRow();
+    const fmtCell = v => typeof v === 'number' ? v.toFixed(decimals) : '—';
+    const diff = (typeof a === 'number' && typeof b === 'number') ? a - b : null;
+    [label, fmtCell(a), fmtCell(b), fmtCell(diff)].forEach(text => {
+      const td = row.insertCell();
+      td.textContent = text;
+    });
+  }
+}
+
+function renderAll(dataA, dataB, cfgA, cfgB) {
+  const maxA = windowedStats(dataA.byMMDD, 'max'), maxB = windowedStats(dataB.byMMDD, 'max');
+  const minA = windowedStats(dataA.byMMDD, 'min'), minB = windowedStats(dataB.byMMDD, 'min');
+  const precipA = windowedStats(dataA.byMMDD, 'precip'), precipB = windowedStats(dataB.byMMDD, 'precip');
+
+  if (maxChart) maxChart.destroy();
+  maxChart = makeChart('maxChart', [
+    ...bandDatasets(maxA, COLOR_A, cfgA.name, false, false),
+    ...bandDatasets(maxB, COLOR_B, cfgB.name, true, false),
+  ], '°C');
+
+  if (minChart) minChart.destroy();
+  minChart = makeChart('minChart', [
+    ...bandDatasets(minA, COLOR_A, cfgA.name, false, false),
+    ...bandDatasets(minB, COLOR_B, cfgB.name, true, false),
+  ], '°C');
+
+  if (precipChart) precipChart.destroy();
+  precipChart = makeChart('precipChart', [
+    ...bandDatasets(precipA, COLOR_A, cfgA.name, false, true),
+    ...bandDatasets(precipB, COLOR_B, cfgB.name, true, true),
+  ], 'mm');
+
+  const maxDiff = maxA.map(({mean: ma}, i) => {
+    const mb = maxB[i].mean;
+    return ma !== null && mb !== null ? fmt(ma - mb) : null;
+  });
+  const minDiff = minA.map(({mean: ma}, i) => {
+    const mb = minB[i].mean;
+    return ma !== null && mb !== null ? fmt(ma - mb) : null;
+  });
+  const precipDiff = precipA.map(({mean: ma}, i) => {
+    const mb = precipB[i].mean;
+    return ma !== null && mb !== null ? fmt(ma - mb) : null;
+  });
+
+  if (tempBiasChart) tempBiasChart.destroy();
+  tempBiasChart = new Chart(document.getElementById('tempBiasChart'), {
+    type: 'line',
+    data: {
+      labels: DAY_KEYS,
+      datasets: [
+        { label: 'Max temp bias', data: maxDiff, borderColor: `rgba(${COLOR_A},1)`, backgroundColor: 'transparent', fill: false, pointRadius: 0, tension: 0.3, borderWidth: 1.5 },
+        { label: 'Min temp bias', data: minDiff, borderColor: 'rgba(47,111,143,1)', backgroundColor: 'transparent', fill: false, pointRadius: 0, tension: 0.3, borderWidth: 1.5 },
+        { label: '_zero', data: maxDiff.map(v => v !== null ? 0 : null), borderColor: 'rgba(26,35,48,0.4)', backgroundColor: 'transparent', fill: false, pointRadius: 0, borderWidth: 1, borderDash: [4,3] },
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { filter: item => !item.text.startsWith('_') } } },
+      scales: { x: { ticks: X_TICKS }, y: { title: { display: true, text: '°C (A − B)' } } }
+    }
+  });
+
+  if (precipBiasChart) precipBiasChart.destroy();
+  precipBiasChart = makeBiasChart('precipBiasChart', precipDiff, 'mm (A − B)', '91,122,74');
+
+  renderSummary(dataA, dataB, cfgA, cfgB);
+}
+
+(async () => {
+  const stations = await loadStations();
+  const keys = Object.keys(stations);
+  const selA = document.getElementById('stationA');
+  const selB = document.getElementById('stationB');
+
+  for (const sel of [selA, selB]) {
+    sel.textContent = '';
+    for (const [key, cfg] of Object.entries(stations)) {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = cfg.name;
+      sel.appendChild(opt);
+    }
+  }
+  selA.value = keys[0];
+  selB.value = keys.length > 1 ? keys[1] : keys[0];
+
+  async function reload() {
+    const cfgA = stations[selA.value];
+    const cfgB = stations[selB.value];
+    document.getElementById('status').textContent = `Loading ${cfgA.name} and ${cfgB.name}…`;
+    const [dataA, dataB] = await Promise.all([loadAll(cfgA, 'A'), loadAll(cfgB, 'B')]);
+    document.getElementById('status').textContent =
+      `${cfgA.name}: ${dataA.loaded}/${dataA.years} years loaded · ${cfgB.name}: ${dataB.loaded}/${dataB.years} years loaded.`;
+    renderAll(dataA, dataB, cfgA, cfgB);
+  }
+
+  selA.addEventListener('change', reload);
+  selB.addEventListener('change', reload);
+  await reload();
+})();
+</script>
+</body>
+</html>
