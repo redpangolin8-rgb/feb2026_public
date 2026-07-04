@@ -31,5 +31,24 @@
     "segments": [
       { "id": 6838 }
     ]
+  },
+  "pond_inlet": {
+    "name": "Pond Inlet",
+    "province": "NU",
+    "startYear": 1922,
+    "segments": [
+      { "id": 1773, "until": 1975 },
+      { "id": 1774, "until": 2013 },
+      { "id": 51080, "from": 2013 }
+    ]
+  },
+  "cambridge_bay": {
+    "name": "Cambridge Bay",
+    "province": "NU",
+    "startYear": 1929,
+    "segments": [
+      { "id": 1786, "until": 2015 },
+      { "id": 53512, "from": 2015 }
+    ]
   }
 }
