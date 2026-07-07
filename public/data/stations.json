@@ -50,5 +50,63 @@
       { "id": 1786, "until": 2015 },
       { "id": 53512, "from": 2015 }
     ]
+  },
+  "dawson": {
+    "name": "Dawson",
+    "province": "YT",
+    "startYear": 1897,
+    "segments": [
+      { "id": 1534, "until": 1976 },
+      { "id": 1535, "until": 1995 },
+      { "id": 10194, "from": 1995 }
+    ]
+  },
+  "whitehorse": {
+    "name": "Whitehorse",
+    "province": "YT",
+    "startYear": 1900,
+    "segments": [
+      { "id": 1616, "until": 1942 },
+      { "id": 1617, "until": 2012 },
+      { "id": 50842, "from": 2012 }
+    ]
+  },
+  "fort_mcpherson": {
+    "name": "Fort McPherson",
+    "province": "NT",
+    "startYear": 1892,
+    "segments": [
+      { "id": 1647, "until": 1981 },
+      { "id": 1648, "until": 2018 },
+      { "id": 52963, "from": 2018 }
+    ]
+  },
+  "hay_river": {
+    "name": "Hay River",
+    "province": "NT",
+    "startYear": 1893,
+    "segments": [
+      { "id": 1663, "until": 1943 },
+      { "id": 1664, "until": 2014 },
+      { "id": 52600, "from": 2014 }
+    ]
+  },
+  "sachs_harbour": {
+    "name": "Sachs Harbour",
+    "province": "NT",
+    "startYear": 1955,
+    "segments": [
+      { "id": 1794, "until": 1994 },
+      { "id": 10076, "from": 1994 }
+    ]
+  },
+  "toronto": {
+    "name": "Toronto",
+    "province": "ON",
+    "startYear": 1840,
+    "segments": [
+      { "id": 5051, "until": 2018 },
+      { "id": 31688, "from": 2018 }
+    ]
   }
 }
