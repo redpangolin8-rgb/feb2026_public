@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Trends &amp; Rankings</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="js/stations.js"></script>
+<style>
+  :root {
+    --ink: #1a2330;
+    --paper: #f6f4ee;
+    --line: #d8d2c4;
+    --accent: #e8a23c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  header { padding: 28px 24px 18px; border-bottom: 2px solid var(--ink); }
+  header h1 { margin: 0; font-size: 1.8rem; letter-spacing: 0.02em; }
+  header p { margin: 6px 0 0; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem; color: #555; }
+  header nav { margin-top: 10px; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem; }
+  header nav a { color: var(--ink); margin-right: 16px; }
+  .station-tag {
+    display: inline-block; margin-top: 10px;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    border: 1px solid var(--ink); padding: 3px 10px; border-radius: 2px;
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px; }
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: end;
+    background: #fff; border: 1px solid var(--line); padding: 16px;
+    border-radius: 4px; margin-bottom: 20px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: #666; }
+  .field select {
+    font-family: inherit; padding: 6px 8px; border: 1px solid var(--line);
+    border-radius: 3px; font-size: 0.9rem; min-width: 160px;
+  }
+  .status {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem;
+    color: #777; margin: 4px 0 18px; min-height: 1.2em;
+  }
+  .headline {
+    background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--accent);
+    border-radius: 4px; padding: 16px 18px; margin-bottom: 20px;
+    font-size: 1.05rem; line-height: 1.5; min-height: 1.5em;
+  }
+  .chart-card {
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 4px; padding: 16px; margin-bottom: 20px;
+  }
+  .chart-card h2 {
+    font-size: 1rem; margin: 0 0 12px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.08em; color: #555;
+  }
+  .rank-wrap { display: flex; flex-wrap: wrap; gap: 24px; }
+  .rank-col { flex: 1; min-width: 260px; }
+  .rank-col h3 {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem;
+    text-transform: uppercase; letter-spacing: 0.07em; color: #555; margin: 0 0 8px;
+  }
+  table.rank {
+    width: 100%; border-collapse: collapse;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem;
+  }
+  table.rank th, table.rank td { padding: 5px 10px; text-align: right; border-bottom: 1px solid var(--line); }
+  table.rank th:first-child, table.rank td:first-child,
+  table.rank th:nth-child(2), table.rank td:nth-child(2) { text-align: left; }
+  table.rank th { color: #555; font-weight: 600; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.06em; }
+  tr.recent td { font-weight: 700; }
+  tr.recent td:nth-child(2)::after {
+    content: 'recent'; font-weight: 600; font-size: 0.65rem; color: #fff;
+    background: var(--accent); border-radius: 8px; padding: 1px 7px; margin-left: 7px;
+    vertical-align: middle; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .footnote {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
+    color: #999; margin-top: 14px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Trends &amp; Rankings</h1>
+  <p>How each month, season, and year compares to the long-term average · <span id="startYear"></span>–<span id="endYear"></span></p>
+  <span class="station-tag" id="stationTag">Loading…</span>
+  <select id="locationSelect" style="margin-left:10px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:0.78rem;padding:3px 8px;border:1px solid var(--ink);border-radius:2px;"></select>
+  <nav>
+    <a href="index.html">← Home</a>
+    <a href="weather.html">Daily weather history</a>
+    <a href="stats.html">Climate statistics</a>
+    <a href="compare.html">Compare stations</a>
+  </nav>
+</header>
+
+<main>
+  <div class="controls">
+    <div class="field">
+      <label for="periodSelect">Period</label>
+      <select id="periodSelect"></select>
+    </div>
+    <div class="field">
+      <label for="varSelect">Variable</label>
+      <select id="varSelect"></select>
+    </div>
+  </div>
+
+  <div class="status" id="status">Loading data…</div>
+
+  <div class="headline" id="headline"></div>
+
+  <div class="chart-card">
+    <h2 id="chartTitle">Anomaly vs long-term average</h2>
+    <canvas id="trendChart" height="280"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2 id="rankTitle">Rankings</h2>
+    <div class="rank-wrap">
+      <div class="rank-col">
+        <h3 id="highTitle">Highest</h3>
+        <table class="rank" id="highTable"></table>
+      </div>
+      <div class="rank-col">
+        <h3 id="lowTitle">Lowest</h3>
+        <table class="rank" id="lowTable"></table>
+      </div>
+    </div>
+    <p class="footnote">
+      Monthly temperature values require at least 15 days of valid data; monthly precipitation
+      totals require at least 25 days. Seasons and years require every constituent month, so
+      partially-recorded periods (including the current one) are excluded rather than shown
+      misleadingly low. Winter is Dec–Feb, credited to the year of January.
+    </p>
+  </div>
+</main>
+
+<script>
+let trendChart = null;
+
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const TEMP_MIN_DAYS   = 15;
+const PRECIP_MIN_DAYS = 25;
+
+// Each period is a list of [yearOffset, monthIndex] pairs. Winter belongs to
+// the year of its January, so it reaches back into December of the prior year.
+const PERIODS = {
+  annual: { label: 'Year (Jan–Dec)',   noun: 'year',   months: Array.from({length: 12}, (_, m) => [0, m]) },
+  winter: { label: 'Winter (Dec–Feb)', noun: 'winter', months: [[-1, 11], [0, 0], [0, 1]] },
+  spring: { label: 'Spring (Mar–May)', noun: 'spring', months: [[0, 2], [0, 3], [0, 4]] },
+  summer: { label: 'Summer (Jun–Aug)', noun: 'summer', months: [[0, 5], [0, 6], [0, 7]] },
+  fall:   { label: 'Fall (Sep–Nov)',   noun: 'fall',   months: [[0, 8], [0, 9], [0, 10]] },
+};
+MONTH_NAMES.forEach((name, m) => {
+  PERIODS['m' + m] = { label: name, noun: name, months: [[0, m]] };
+});
+
+const VARS = {
+  tmean:  { label: 'Mean temperature', unit: '°C', sum: false, decimals: 1, high: 'hottest', low: 'coldest', posColor: '192,83,62', negColor: '47,111,143' },
+  tmax:   { label: 'Max temperature',  unit: '°C', sum: false, decimals: 1, high: 'hottest', low: 'coldest', posColor: '192,83,62', negColor: '47,111,143' },
+  tmin:   { label: 'Min temperature',  unit: '°C', sum: false, decimals: 1, high: 'mildest', low: 'coldest', posColor: '192,83,62', negColor: '47,111,143' },
+  precip: { label: 'Precipitation',    unit: 'mm', sum: true,  decimals: 1, high: 'wettest', low: 'driest',  posColor: '91,122,74', negColor: '193,140,60' },
+};
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const header = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+  const dateIdx   = header.findIndex(h => /date\/time|date$/i.test(h));
+  const maxIdx    = header.findIndex(h => /max temp/i.test(h));
+  const minIdx    = header.findIndex(h => /min temp/i.test(h));
+  const meanIdx   = header.findIndex(h => /mean temp/i.test(h));
+  const precipIdx = header.findIndex(h => /total precip/i.test(h));
+  if (dateIdx === -1) return [];
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.replace(/"/g,'').trim());
+    if (cols.length < header.length) continue;
+    const date = cols[dateIdx];
+    if (!date) continue;
+    const max    = maxIdx    !== -1 ? parseFloat(cols[maxIdx])    : NaN;
+    const min    = minIdx    !== -1 ? parseFloat(cols[minIdx])    : NaN;
+    const mean   = meanIdx   !== -1 ? parseFloat(cols[meanIdx])   : NaN;
+    const precip = precipIdx !== -1 ? parseFloat(cols[precipIdx]) : NaN;
+    rows.push({
+      date,
+      max:    isFinite(max)    ? max    : null,
+      min:    isFinite(min)    ? min    : null,
+      mean:   isFinite(mean)   ? mean   : (isFinite(max) && isFinite(min) ? (max + min) / 2 : null),
+      precip: isFinite(precip) ? precip : null,
+    });
+  }
+  return rows;
+}
+
+// monthly[varKey][year][month] = aggregated value or undefined
+async function loadAll(cfg) {
+  const endYear = new Date().getFullYear();
+  const years = Array.from({length: endYear - cfg.startYear + 1}, (_, i) => cfg.startYear + i);
+  document.getElementById('status').textContent = `Loading ${years.length} data files…`;
+  const texts = await Promise.all(years.map(year =>
+    fetch(weatherDataURL(cfg, year)).then(r => r.ok ? r.text() : null).catch(() => null)
+  ));
+
+  const acc = {};  // acc[year][month] = per-variable {sum, n}
+  let loaded = 0;
+  for (const text of texts) {
+    if (!text) continue;
+    loaded++;
+    for (const row of parseCSV(text)) {
+      const y = parseInt(row.date.slice(0, 4));
+      const m = parseInt(row.date.slice(5, 7)) - 1;
+      if (!acc[y]) acc[y] = {};
+      if (!acc[y][m]) acc[y][m] = { tmean: [0,0], tmax: [0,0], tmin: [0,0], precip: [0,0] };
+      const cell = acc[y][m];
+      if (row.mean   !== null) { cell.tmean[0]  += row.mean;   cell.tmean[1]++;  }
+      if (row.max    !== null) { cell.tmax[0]   += row.max;    cell.tmax[1]++;   }
+      if (row.min    !== null) { cell.tmin[0]   += row.min;    cell.tmin[1]++;   }
+      if (row.precip !== null) { cell.precip[0] += row.precip; cell.precip[1]++; }
+    }
+  }
+
+  const monthly = { tmean: {}, tmax: {}, tmin: {}, precip: {} };
+  for (const [y, months] of Object.entries(acc)) {
+    for (const [m, cell] of Object.entries(months)) {
+      for (const varKey of ['tmean', 'tmax', 'tmin']) {
+        const [sum, n] = cell[varKey];
+        if (n >= TEMP_MIN_DAYS) {
+          if (!monthly[varKey][y]) monthly[varKey][y] = {};
+          monthly[varKey][y][m] = sum / n;
+        }
+      }
+      const [psum, pn] = cell.precip;
+      if (pn >= PRECIP_MIN_DAYS) {
+        if (!monthly.precip[y]) monthly.precip[y] = {};
+        monthly.precip[y][m] = psum;
+      }
+    }
+  }
+
+  document.getElementById('status').textContent = `Loaded ${loaded} years of data.`;
+  return { monthly, years };
+}
+
+// { year: value } for one variable over one period, only complete periods
+function periodSeries(monthly, years, varKey, periodKey) {
+  const per = PERIODS[periodKey];
+  const isSum = VARS[varKey].sum;
+  const series = {};
+  for (const year of years) {
+    const vals = [];
+    let complete = true;
+    for (const [dy, m] of per.months) {
+      const v = monthly[varKey][year + dy]?.[m];
+      if (v === undefined) { complete = false; break; }
+      vals.push(v);
+    }
+    if (!complete) continue;
+    series[year] = isSum
+      ? vals.reduce((a, b) => a + b, 0)
+      : vals.reduce((a, b) => a + b, 0) / vals.length;
+  }
+  return series;
+}
+
+function ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function fillRankTable(tableEl, ranked, unit, decimals, baseline, recentCutoff) {
+  tableEl.textContent = '';
+  const thead = tableEl.createTHead();
+  const hrow = thead.insertRow();
+  ['#', 'Year', `Value (${unit})`, 'vs avg'].forEach(h => {
+    const th = document.createElement('th');
+    th.textContent = h;
+    hrow.appendChild(th);
+  });
+  const tbody = tableEl.createTBody();
+  for (let i = 0; i < Math.min(5, ranked.length); i++) {
+    const [year, value] = ranked[i];
+    const row = tbody.insertRow();
+    if (year >= recentCutoff) row.className = 'recent';
+    const anom = value - baseline;
+    [String(i + 1), String(year), value.toFixed(decimals),
+     (anom >= 0 ? '+' : '') + anom.toFixed(decimals)].forEach(text => {
+      const td = row.insertCell();
+      td.textContent = text;
+    });
+  }
+}
+
+function render(monthly, years, varKey, periodKey) {
+  const varCfg = VARS[varKey];
+  const per = PERIODS[periodKey];
+  const series = periodSeries(monthly, years, varKey, periodKey);
+  const seriesYears = Object.keys(series).map(Number).sort((a, b) => a - b);
+
+  const headlineEl = document.getElementById('headline');
+  if (!seriesYears.length) {
+    if (trendChart) { trendChart.destroy(); trendChart = null; }
+    headlineEl.textContent = `No complete ${per.noun} periods with sufficient data for ${varCfg.label.toLowerCase()}.`;
+    document.getElementById('highTable').textContent = '';
+    document.getElementById('lowTable').textContent = '';
+    return;
+  }
+
+  const values = seriesYears.map(y => series[y]);
+  const baseline = values.reduce((a, b) => a + b, 0) / values.length;
+  const anomalies = values.map(v => +(v - baseline).toFixed(2));
+
+  // Centered 11-year rolling average of the anomalies (needs 6+ years present)
+  const rolling = anomalies.map((_, i) => {
+    const window = anomalies.slice(Math.max(0, i - 5), i + 6);
+    return window.length >= 6
+      ? +(window.reduce((a, b) => a + b, 0) / window.length).toFixed(2)
+      : null;
+  });
+
+  document.getElementById('chartTitle').textContent =
+    `${per.label} · ${varCfg.label} anomaly vs the ${seriesYears[0]}–${seriesYears[seriesYears.length-1]} average of ${baseline.toFixed(varCfg.decimals)} ${varCfg.unit}`;
+
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(document.getElementById('trendChart'), {
+    type: 'bar',
+    data: {
+      labels: seriesYears,
+      datasets: [
+        {
+          label: `Anomaly (${varCfg.unit})`,
+          data: anomalies,
+          backgroundColor: anomalies.map(a => a >= 0 ? `rgba(${varCfg.posColor},0.7)` : `rgba(${varCfg.negColor},0.7)`),
+          borderWidth: 0,
+          order: 2,
+        },
+        {
+          label: '11-yr centered average',
+          data: rolling,
+          type: 'line',
+          borderColor: 'rgba(26,35,48,0.75)',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.3,
+          spanGaps: true,
+          order: 1,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              if (ctx.dataset.type === 'line') return `11-yr avg: ${ctx.parsed.y} ${varCfg.unit}`;
+              const year = seriesYears[ctx.dataIndex];
+              const v = series[year];
+              const a = anomalies[ctx.dataIndex];
+              return `${v.toFixed(varCfg.decimals)} ${varCfg.unit} (${a >= 0 ? '+' : ''}${a} vs avg)`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 20 } },
+        y: { title: { display: true, text: `${varCfg.unit} vs average` } },
+      }
+    }
+  });
+
+  // Rankings
+  const desc = seriesYears.map(y => [y, series[y]]).sort((a, b) => b[1] - a[1]);
+  const asc  = [...desc].reverse();
+  const endYear = new Date().getFullYear();
+  const recentCutoff = endYear - 4;
+
+  document.getElementById('rankTitle').textContent = `${per.label} rankings · ${seriesYears.length} on record`;
+  document.getElementById('highTitle').textContent = `${varCfg.high[0].toUpperCase()}${varCfg.high.slice(1)}`;
+  document.getElementById('lowTitle').textContent  = `${varCfg.low[0].toUpperCase()}${varCfg.low.slice(1)}`;
+  fillRankTable(document.getElementById('highTable'), desc, varCfg.unit, varCfg.decimals, baseline, recentCutoff);
+  fillRankTable(document.getElementById('lowTable'),  asc,  varCfg.unit, varCfg.decimals, baseline, recentCutoff);
+
+  // Headline for the most recent completed period
+  const latestYear = seriesYears[seriesYears.length - 1];
+  const latestValue = series[latestYear];
+  const latestAnom = latestValue - baseline;
+  const rankHigh = desc.findIndex(([y]) => y === latestYear) + 1;
+  const rankLow  = asc.findIndex(([y]) => y === latestYear) + 1;
+  const side = latestAnom >= 0
+    ? `${ordinal(rankHigh)} ${varCfg.high}`
+    : `${ordinal(rankLow)} ${varCfg.low}`;
+  const periodName = periodKey.startsWith('m') || periodKey === 'annual'
+    ? `${per.noun} ${latestYear}` : `${per.noun[0].toUpperCase()}${per.noun.slice(1)} ${latestYear}`;
+  headlineEl.textContent =
+    `${periodName} was the ${side} of ${seriesYears.length} on record — ` +
+    `${latestValue.toFixed(varCfg.decimals)} ${varCfg.unit}, ` +
+    `${Math.abs(latestAnom).toFixed(varCfg.decimals)} ${varCfg.unit} ${latestAnom >= 0 ? 'above' : 'below'} the long-term average.`;
+}
+
+(async () => {
+  const stations = await loadStations();
+  const activeKey = currentStationKey(stations);
+  const cfg = stations[activeKey];
+
+  initStationNav(document.getElementById('locationSelect'), stations, activeKey);
+  document.getElementById('stationTag').textContent = `${cfg.name} · ${stationLabel(cfg)}`;
+  document.title = `${cfg.name} — Trends & Rankings`;
+  document.getElementById('startYear').textContent = cfg.startYear;
+  document.getElementById('endYear').textContent = new Date().getFullYear();
+
+  const periodSel = document.getElementById('periodSelect');
+  for (const [key, per] of Object.entries(PERIODS)) {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = per.label;
+    periodSel.appendChild(opt);
+  }
+  periodSel.value = 'summer';
+
+  const varSel = document.getElementById('varSelect');
+  for (const [key, v] of Object.entries(VARS)) {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = v.label;
+    varSel.appendChild(opt);
+  }
+  varSel.value = 'tmean';
+
+  const { monthly, years } = await loadAll(cfg);
+
+  const rerender = () => render(monthly, years, varSel.value, periodSel.value);
+  periodSel.addEventListener('change', rerender);
+  varSel.addEventListener('change', rerender);
+  rerender();
+})();
+</script>
+</body>
+</html>
