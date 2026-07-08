@@ -60,6 +60,7 @@
     <a href="anomalies.html" style="margin-left:16px">Anomalies →</a>
     <a href="compare.html" style="margin-left:16px">Compare stations →</a>
     <a href="trends.html" style="margin-left:16px">Trends →</a>
+    <a href="extremes.html" style="margin-left:16px">Extremes →</a>
   </nav>
 </header>
 
@@ -120,6 +121,8 @@ function parseCSV(text) {
   const maxIdx    = header.findIndex(h => /max temp/i.test(h));
   const minIdx    = header.findIndex(h => /min temp/i.test(h));
   const precipIdx = header.findIndex(h => /total precip/i.test(h));
+  const rainIdx   = header.findIndex(h => /total rain/i.test(h));
+  const snowIdx   = header.findIndex(h => /total snow/i.test(h));
   if (dateIdx === -1 || maxIdx === -1 || minIdx === -1) return [];
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
@@ -128,7 +131,7 @@ function parseCSV(text) {
     const date   = cols[dateIdx];
     const max    = parseFloat(cols[maxIdx]);
     const min    = parseFloat(cols[minIdx]);
-    const precip = precipIdx !== -1 ? parseFloat(cols[precipIdx]) : NaN;
+    const precip = precipFrom(cols, precipIdx, rainIdx, snowIdx);
     if (!date) continue;
     rows.push({
       date,

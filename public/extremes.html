@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Extreme Precipitation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="js/stations.js"></script>
+<style>
+  :root {
+    --ink: #1a2330;
+    --paper: #f6f4ee;
+    --line: #d8d2c4;
+    --accent: #e8a23c;
+    --rain: #5b7a4a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  header { padding: 28px 24px 18px; border-bottom: 2px solid var(--ink); }
+  header h1 { margin: 0; font-size: 1.8rem; letter-spacing: 0.02em; }
+  header p { margin: 6px 0 0; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem; color: #555; }
+  header nav { margin-top: 10px; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem; }
+  header nav a { color: var(--ink); margin-right: 16px; }
+  .station-tag {
+    display: inline-block; margin-top: 10px;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    border: 1px solid var(--ink); padding: 3px 10px; border-radius: 2px;
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px; }
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: end;
+    background: #fff; border: 1px solid var(--line); padding: 16px;
+    border-radius: 4px; margin-bottom: 20px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: #666; }
+  .field select {
+    font-family: inherit; padding: 6px 8px; border: 1px solid var(--line);
+    border-radius: 3px; font-size: 0.9rem; min-width: 140px;
+  }
+  .status {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem;
+    color: #777; margin: 4px 0 18px; min-height: 1.2em;
+  }
+  .headline {
+    background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--accent);
+    border-radius: 4px; padding: 16px 18px; margin-bottom: 20px;
+    font-size: 1.05rem; line-height: 1.5; min-height: 1.5em;
+  }
+  .chart-card {
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 4px; padding: 16px; margin-bottom: 20px;
+  }
+  .chart-card h2 {
+    font-size: 1rem; margin: 0 0 12px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.08em; color: #555;
+  }
+  .rank-wrap { display: flex; flex-wrap: wrap; gap: 24px; }
+  .rank-col { flex: 1; min-width: 280px; }
+  .rank-col h3 {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem;
+    text-transform: uppercase; letter-spacing: 0.07em; color: #555; margin: 0 0 8px;
+  }
+  table.rank {
+    width: 100%; border-collapse: collapse;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.82rem;
+  }
+  table.rank th, table.rank td { padding: 5px 8px; text-align: right; border-bottom: 1px solid var(--line); }
+  table.rank th:nth-child(2), table.rank td:nth-child(2) { text-align: left; white-space: nowrap; }
+  table.rank th { color: #555; font-weight: 600; text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  tr.recent td { font-weight: 700; }
+  tr.recent td:nth-child(2)::after {
+    content: 'recent'; font-weight: 600; font-size: 0.62rem; color: #fff;
+    background: var(--accent); border-radius: 8px; padding: 1px 6px; margin-left: 6px;
+    vertical-align: middle; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .footnote {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
+    color: #999; margin-top: 14px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Extreme Precipitation</h1>
+  <p>Largest 1-, 2-, and 3-day precipitation events on record, and how the past year compares · <span id="startYear"></span>–<span id="endYear"></span></p>
+  <span class="station-tag" id="stationTag">Loading…</span>
+  <select id="locationSelect" style="margin-left:10px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:0.78rem;padding:3px 8px;border:1px solid var(--ink);border-radius:2px;"></select>
+  <nav>
+    <a href="index.html">← Home</a>
+    <a href="precip.html">Precipitation</a>
+    <a href="trends.html">Trends</a>
+    <a href="stats.html">Climate statistics</a>
+  </nav>
+</header>
+
+<main>
+  <div class="controls">
+    <div class="field">
+      <label for="durationSelect">Event duration</label>
+      <select id="durationSelect">
+        <option value="1">1-day</option>
+        <option value="2">2-day</option>
+        <option value="3">3-day</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="status" id="status">Loading data…</div>
+
+  <div class="headline" id="headline"></div>
+
+  <div class="chart-card">
+    <h2 id="recentTitle">Past 12 months vs historical extremes</h2>
+    <canvas id="recentChart" height="260"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2 id="amaxTitle">Largest event of each year</h2>
+    <canvas id="amaxChart" height="260"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2 id="seasonalTitle">When the biggest events happen</h2>
+    <canvas id="seasonalChart" height="240"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>All-time top 10 events</h2>
+    <div class="rank-wrap">
+      <div class="rank-col"><h3>1-day</h3><table class="rank" id="top1"></table></div>
+      <div class="rank-col"><h3>2-day</h3><table class="rank" id="top2"></table></div>
+      <div class="rank-col"><h3>3-day</h3><table class="rank" id="top3"></table></div>
+    </div>
+    <p class="footnote">
+      Events are non-overlapping: a single storm counts once per duration, not once per rolling
+      window it spans. Multi-day totals require every day in the window to have valid data.
+      The annual-maximum chart only includes years with at least 300 days of valid precipitation
+      data, so partial years (including the current one) are excluded there but still appear in
+      the past-12-months chart and can still enter the top-10 lists.
+      The seasonal chart assigns each event to the month of its end date and splits the record
+      at its midpoint year; era counts are raw, not adjusted for differing data completeness
+      between eras.
+    </p>
+  </div>
+</main>
+
+<script>
+let recentChart = null, amaxChart = null, seasonalChart = null;
+
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DURATIONS = [1, 2, 3];
+const AMAX_MIN_DAYS = 300;
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const header = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+  const dateIdx   = header.findIndex(h => /date\/time|date$/i.test(h));
+  const precipIdx = header.findIndex(h => /total precip/i.test(h));
+  const rainIdx   = header.findIndex(h => /total rain/i.test(h));
+  const snowIdx   = header.findIndex(h => /total snow/i.test(h));
+  if (dateIdx === -1 || precipIdx === -1) return [];
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.replace(/"/g,'').trim());
+    if (cols.length < header.length) continue;
+    const date = cols[dateIdx];
+    if (!date) continue;
+    const precip = precipFrom(cols, precipIdx, rainIdx, snowIdx);
+    rows.push({ date, precip: isFinite(precip) ? precip : null });
+  }
+  return rows;
+}
+
+// days: chronological [{d: 'YYYY-MM-DD', t: epochDay, v: mm|null}]
+async function loadAll(cfg) {
+  const endYear = new Date().getFullYear();
+  const years = Array.from({length: endYear - cfg.startYear + 1}, (_, i) => cfg.startYear + i);
+  document.getElementById('status').textContent = `Loading ${years.length} data files…`;
+  const texts = await Promise.all(years.map(year =>
+    fetch(weatherDataURL(cfg, year)).then(r => r.ok ? r.text() : null).catch(() => null)
+  ));
+  const days = [];
+  let loaded = 0;
+  for (const text of texts) {
+    if (!text) continue;
+    loaded++;
+    for (const row of parseCSV(text)) {
+      days.push({ d: row.date, t: Date.parse(row.date + 'T00:00:00Z') / 86400000, v: row.precip });
+    }
+  }
+  days.sort((a, b) => a.t - b.t);
+  document.getElementById('status').textContent = `Loaded ${loaded} years of data.`;
+  return days;
+}
+
+// Every valid N-day rolling window: consecutive calendar days, all with data.
+function buildWindows(days, N) {
+  const out = [];
+  for (let i = N - 1; i < days.length; i++) {
+    if (days[i].t - days[i - N + 1].t !== N - 1) continue;
+    let sum = 0, ok = true;
+    for (let j = i - N + 1; j <= i; j++) {
+      if (days[j].v === null) { ok = false; break; }
+      sum += days[j].v;
+    }
+    if (!ok) continue;
+    out.push({
+      tEnd: days[i].t,
+      total: +sum.toFixed(1),
+      startDate: days[i - N + 1].d,
+      endDate: days[i].d,
+      year: parseInt(days[i].d.slice(0, 4)),
+    });
+  }
+  return out;
+}
+
+// Greedy non-overlapping event list, biggest first: one storm = one event.
+function dedupeEvents(windows, N) {
+  const sorted = [...windows].sort((a, b) => b.total - a.total);
+  const used = new Set();
+  const events = [];
+  for (const w of sorted) {
+    let clash = false;
+    for (let t = w.tEnd - N + 1; t <= w.tEnd; t++) {
+      if (used.has(t)) { clash = true; break; }
+    }
+    if (clash) continue;
+    for (let t = w.tEnd - N + 1; t <= w.tEnd; t++) used.add(t);
+    events.push(w);
+  }
+  return events;
+}
+
+// Annual maximum N-day total, only for years with enough valid daily data.
+function annualMax(days, windows) {
+  const validDays = {};
+  for (const day of days) {
+    if (day.v === null) continue;
+    const y = parseInt(day.d.slice(0, 4));
+    validDays[y] = (validDays[y] || 0) + 1;
+  }
+  const amax = {};
+  for (const w of windows) {
+    if ((validDays[w.year] || 0) < AMAX_MIN_DAYS) continue;
+    if (!(w.year in amax) || w.total > amax[w.year].total) amax[w.year] = w;
+  }
+  return amax;
+}
+
+function fmtEventDates(ev) {
+  return ev.startDate === ev.endDate ? ev.endDate : `${ev.startDate} → ${ev.endDate}`;
+}
+
+function fillTopTable(tableEl, events, recentCutoff) {
+  tableEl.textContent = '';
+  const thead = tableEl.createTHead();
+  const hrow = thead.insertRow();
+  ['#', 'Date(s)', 'Total (mm)'].forEach(h => {
+    const th = document.createElement('th');
+    th.textContent = h;
+    hrow.appendChild(th);
+  });
+  const tbody = tableEl.createTBody();
+  for (let i = 0; i < Math.min(10, events.length); i++) {
+    const ev = events[i];
+    const row = tbody.insertRow();
+    if (ev.year >= recentCutoff) row.className = 'recent';
+    [String(i + 1), fmtEventDates(ev), ev.total.toFixed(1)].forEach(text => {
+      const td = row.insertCell();
+      td.textContent = text;
+    });
+  }
+}
+
+function render(computed, days, N) {
+  const { events, amax } = computed[N];
+  const record = events[0] ?? null;
+  const entryBar = events[9] ?? null;  // value needed to crack the top 10
+  const noun = N === 1 ? '1-day' : `${N}-day`;
+
+  // ── Past 12 months chart ──────────────────────────────────────────────────
+  const lastT = days.length ? days[days.length - 1].t : 0;
+  const recentDays = days.filter(day => day.t > lastT - 365);
+  const labels = recentDays.map(day => day.d);
+  const daily = recentDays.map(day => day.v);
+
+  const rollingByEnd = {};
+  for (const w of buildWindows(recentDays, N)) rollingByEnd[w.endDate] = w.total;
+  const rolling = recentDays.map(day => rollingByEnd[day.d] ?? null);
+
+  const datasets = [
+    { label: 'Daily (mm)', data: daily, type: 'bar', backgroundColor: 'rgba(91,122,74,0.65)', order: 3 },
+  ];
+  if (N > 1) {
+    datasets.push({ label: `${noun} total`, data: rolling, type: 'line', borderColor: 'rgba(47,111,143,1)', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.1, spanGaps: false, order: 2 });
+  }
+  if (entryBar) {
+    datasets.push({ label: `Top-10 threshold (${entryBar.total.toFixed(1)} mm)`, data: labels.map(() => entryBar.total), type: 'line', borderColor: 'rgba(232,162,60,0.9)', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0, order: 1 });
+  }
+  if (record) {
+    datasets.push({ label: `All-time record (${record.total.toFixed(1)} mm)`, data: labels.map(() => record.total), type: 'line', borderColor: 'rgba(26,35,48,0.7)', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [2, 3], pointRadius: 0, order: 1 });
+  }
+
+  document.getElementById('recentTitle').textContent =
+    `Past 12 months vs historical ${noun} extremes`;
+  if (recentChart) recentChart.destroy();
+  recentChart = new Chart(document.getElementById('recentChart'), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ticks: { maxRotation: 0, autoSkip: false,
+          callback: (_, i) => labels[i]?.endsWith('-01') ? `${MONTH_NAMES[parseInt(labels[i].slice(5,7)) - 1]} ${labels[i].slice(0,4)}` : '' } },
+        y: { title: { display: true, text: 'mm' }, beginAtZero: true },
+      }
+    }
+  });
+
+  // ── Annual maximum chart ──────────────────────────────────────────────────
+  const amaxYears = Object.keys(amax).map(Number).sort((a, b) => a - b);
+  const yearLabels = amaxYears.length
+    ? Array.from({length: amaxYears[amaxYears.length-1] - amaxYears[0] + 1}, (_, i) => amaxYears[0] + i)
+    : [];
+  const amaxVals = yearLabels.map(y => amax[y] ? amax[y].total : null);
+  const amaxRolling = amaxVals.map((_, i) => {
+    const window = amaxVals.slice(Math.max(0, i - 5), i + 6).filter(v => v !== null);
+    return window.length >= 6 ? +(window.reduce((a, b) => a + b, 0) / window.length).toFixed(1) : null;
+  });
+
+  document.getElementById('amaxTitle').textContent =
+    `Largest ${noun} event of each year (mm)`;
+  if (amaxChart) amaxChart.destroy();
+  amaxChart = new Chart(document.getElementById('amaxChart'), {
+    type: 'bar',
+    data: {
+      labels: yearLabels,
+      datasets: [
+        { label: `Annual max ${noun} (mm)`, data: amaxVals, backgroundColor: 'rgba(91,122,74,0.65)', order: 2 },
+        { label: '11-yr centered average', data: amaxRolling, type: 'line', borderColor: 'rgba(26,35,48,0.75)', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.3, spanGaps: true, order: 1 },
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              if (ctx.dataset.type === 'line') return `11-yr avg: ${ctx.parsed.y} mm`;
+              const ev = amax[yearLabels[ctx.dataIndex]];
+              return ev ? `${ev.total.toFixed(1)} mm (${fmtEventDates(ev)})` : '';
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 20 } },
+        y: { title: { display: true, text: 'mm' }, beginAtZero: true },
+      }
+    }
+  });
+
+  // ── Seasonal distribution: which months the biggest events land in, split
+  //    at the record's midpoint year so a shift between eras is visible ─────
+  const TOP_N = 50;
+  const top = events.slice(0, TOP_N);
+  const firstYear = days.length ? parseInt(days[0].d.slice(0, 4)) : 0;
+  const lastYear  = days.length ? parseInt(days[days.length - 1].d.slice(0, 4)) : 0;
+  const midYear = Math.floor((firstYear + lastYear) / 2);
+  const eras = [
+    { label: `${firstYear}–${midYear}`,    counts: Array(12).fill(0), years: Array.from({length: 12}, () => []) },
+    { label: `${midYear + 1}–${lastYear}`, counts: Array(12).fill(0), years: Array.from({length: 12}, () => []) },
+  ];
+  for (const ev of top) {
+    const m = parseInt(ev.endDate.slice(5, 7)) - 1;
+    const era = ev.year <= midYear ? eras[0] : eras[1];
+    era.counts[m]++;
+    era.years[m].push(ev.year);
+  }
+
+  document.getElementById('seasonalTitle').textContent =
+    `When the biggest events happen · top ${top.length} ${noun} events by month`;
+  if (seasonalChart) seasonalChart.destroy();
+  seasonalChart = new Chart(document.getElementById('seasonalChart'), {
+    type: 'bar',
+    data: {
+      labels: MONTH_NAMES,
+      datasets: [
+        { label: eras[0].label, data: eras[0].counts, backgroundColor: 'rgba(26,35,48,0.4)' },
+        { label: eras[1].label, data: eras[1].counts, backgroundColor: 'rgba(91,122,74,0.75)' },
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      plugins: {
+        tooltip: {
+          callbacks: {
+            afterLabel: ctx => {
+              const yrs = eras[ctx.datasetIndex].years[ctx.dataIndex];
+              return yrs.length ? 'Years: ' + [...yrs].sort((a, b) => a - b).join(', ') : '';
+            }
+          }
+        }
+      },
+      scales: {
+        y: { title: { display: true, text: 'Events' }, beginAtZero: true, ticks: { precision: 0 } },
+      }
+    }
+  });
+
+  // ── Headline: biggest event of the past 12 months, ranked all-time ───────
+  const headlineEl = document.getElementById('headline');
+  const recentWindows = buildWindows(recentDays, N);
+  if (!recentWindows.length) {
+    headlineEl.textContent = `No valid ${noun} precipitation data in the past 12 months.`;
+    return;
+  }
+  const biggest = recentWindows.reduce((best, w) => w.total > best.total ? w : best);
+  const rank = events.filter(ev => ev.total > biggest.total).length + 1;
+  const amaxAll = Object.values(amax).map(ev => ev.total);
+  const pct = amaxAll.length
+    ? Math.round(100 * amaxAll.filter(v => v < biggest.total).length / amaxAll.length)
+    : null;
+  let text = `Largest ${noun} event of the past 12 months: ${biggest.total.toFixed(1)} mm (${fmtEventDates(biggest)}) — ` +
+             `ranks #${rank} among all ${events.length.toLocaleString()} ${noun} events on record`;
+  if (pct !== null) text += `, wetter than ${pct}% of years' annual maxima`;
+  text += rank <= 10 ? ' — an all-time top-10 event.' : '.';
+  headlineEl.textContent = text;
+}
+
+(async () => {
+  const stations = await loadStations();
+  const activeKey = currentStationKey(stations);
+  const cfg = stations[activeKey];
+
+  initStationNav(document.getElementById('locationSelect'), stations, activeKey);
+  document.getElementById('stationTag').textContent = `${cfg.name} · ${stationLabel(cfg)}`;
+  document.title = `${cfg.name} — Extreme Precipitation`;
+  document.getElementById('startYear').textContent = cfg.startYear;
+  document.getElementById('endYear').textContent = new Date().getFullYear();
+
+  const days = await loadAll(cfg);
+
+  // Precompute events and annual maxima once per duration
+  const computed = {};
+  for (const N of DURATIONS) {
+    const windows = buildWindows(days, N);
+    computed[N] = { events: dedupeEvents(windows, N), amax: annualMax(days, windows) };
+  }
+
+  const recentCutoff = new Date().getFullYear() - 4;
+  fillTopTable(document.getElementById('top1'), computed[1].events, recentCutoff);
+  fillTopTable(document.getElementById('top2'), computed[2].events, recentCutoff);
+  fillTopTable(document.getElementById('top3'), computed[3].events, recentCutoff);
+
+  const durationSel = document.getElementById('durationSelect');
+  durationSel.addEventListener('change', () => render(computed, days, parseInt(durationSel.value)));
+  render(computed, days, parseInt(durationSel.value));
+})();
+</script>
+</body>
+</html>

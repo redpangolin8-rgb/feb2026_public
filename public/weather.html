@@ -138,6 +138,7 @@
     <a href="anomalies.html" style="color:var(--ink);margin-left:16px">Anomalies →</a>
     <a href="compare.html" style="color:var(--ink);margin-left:16px">Compare stations →</a>
     <a href="trends.html" style="color:var(--ink);margin-left:16px">Trends →</a>
+    <a href="extremes.html" style="color:var(--ink);margin-left:16px">Extremes →</a>
   </nav>
 </header>
 
@@ -350,7 +351,7 @@ function parseCSV(text) {
     const date   = cols[dateIdx];
     const max    = parseFloat(cols[maxIdx]);
     const min    = parseFloat(cols[minIdx]);
-    const precip = precipIdx !== -1 ? parseFloat(cols[precipIdx]) : NaN;
+    const precip = precipFrom(cols, precipIdx, rainIdx, snowIdx);
     const rain   = rainIdx   !== -1 ? parseFloat(cols[rainIdx])   : NaN;
     const snow   = snowIdx   !== -1 ? parseFloat(cols[snowIdx])   : NaN;
     if (!date) continue;

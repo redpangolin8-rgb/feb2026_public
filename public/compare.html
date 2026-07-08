@@ -76,6 +76,7 @@
     <a href="precip.html">Precipitation</a>
     <a href="anomalies.html">Anomalies</a>
     <a href="trends.html">Trends</a>
+    <a href="extremes.html">Extremes</a>
   </nav>
 </header>
 
@@ -88,6 +89,13 @@
     <div class="picker">
       <label><span class="swatch" style="background:var(--b)"></span>Station B</label>
       <select id="stationB"></select>
+    </div>
+    <div class="picker">
+      <label>Options</label>
+      <label style="display:flex;align-items:center;gap:7px;font-size:0.88rem;text-transform:none;letter-spacing:normal;cursor:pointer;padding:6px 0;">
+        <input type="checkbox" id="overlapOnly">
+        Only overlapping years
+      </label>
     </div>
   </div>
 
@@ -156,6 +164,8 @@ function parseCSV(text) {
   const maxIdx    = header.findIndex(h => /max temp/i.test(h));
   const minIdx    = header.findIndex(h => /min temp/i.test(h));
   const precipIdx = header.findIndex(h => /total precip/i.test(h));
+  const rainIdx   = header.findIndex(h => /total rain/i.test(h));
+  const snowIdx   = header.findIndex(h => /total snow/i.test(h));
   if (dateIdx === -1 || maxIdx === -1 || minIdx === -1) return [];
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
@@ -164,7 +174,7 @@ function parseCSV(text) {
     const date   = cols[dateIdx];
     const max    = parseFloat(cols[maxIdx]);
     const min    = parseFloat(cols[minIdx]);
-    const precip = precipIdx !== -1 ? parseFloat(cols[precipIdx]) : NaN;
+    const precip = precipFrom(cols, precipIdx, rainIdx, snowIdx);
     if (!date) continue;
     rows.push({
       date,
@@ -176,18 +186,31 @@ function parseCSV(text) {
   return rows;
 }
 
-async function loadAll(cfg, label) {
+// Keeps rows grouped per calendar year so an overlap filter can be applied
+// later without refetching.
+async function loadAll(cfg) {
   const endYear = new Date().getFullYear();
   const years = Array.from({length: endYear - cfg.startYear + 1}, (_, i) => cfg.startYear + i);
   const texts = await Promise.all(years.map(year =>
     fetch(weatherDataURL(cfg, year)).then(r => r.ok ? r.text() : null).catch(() => null)
   ));
-  const byMMDD = {};
+  const rowsByYear = {};
   let loaded = 0;
-  for (const text of texts) {
-    if (!text) continue;
+  for (let i = 0; i < years.length; i++) {
+    if (!texts[i]) continue;
+    const rows = parseCSV(texts[i]);
+    if (!rows.length) continue;
     loaded++;
-    for (const row of parseCSV(text)) {
+    rowsByYear[years[i]] = rows;
+  }
+  return { rowsByYear, loaded, years: years.length };
+}
+
+function buildByMMDD(rowsByYear, yearFilter) {
+  const byMMDD = {};
+  for (const [year, rows] of Object.entries(rowsByYear)) {
+    if (yearFilter && !yearFilter.has(Number(year))) continue;
+    for (const row of rows) {
       const key = row.date.slice(5);
       if (!byMMDD[key]) byMMDD[key] = { max: [], min: [], precip: [] };
       if (row.max    !== null) byMMDD[key].max.push(row.max);
@@ -195,7 +218,7 @@ async function loadAll(cfg, label) {
       if (row.precip !== null) byMMDD[key].precip.push(row.precip);
     }
   }
-  return { byMMDD, loaded, years: years.length };
+  return byMMDD;
 }
 
 function stats(values) {
@@ -302,7 +325,7 @@ function overallStats(byMMDD, variable) {
 
 function renderSummary(dataA, dataB, cfgA, cfgB) {
   const rows = [
-    { label: 'Years of data loaded', a: dataA.loaded, b: dataB.loaded, decimals: 0 },
+    { label: 'Years compared', a: dataA.loaded, b: dataB.loaded, decimals: 0 },
     { label: 'Avg daily max temp (°C)', a: overallStats(dataA.byMMDD, 'max').mean, b: overallStats(dataB.byMMDD, 'max').mean, decimals: 2 },
     { label: 'Avg daily min temp (°C)', a: overallStats(dataA.byMMDD, 'min').mean, b: overallStats(dataB.byMMDD, 'min').mean, decimals: 2 },
     { label: 'Avg daily precip (mm)',   a: overallStats(dataA.byMMDD, 'precip').mean, b: overallStats(dataB.byMMDD, 'precip').mean, decimals: 2 },
@@ -411,18 +434,49 @@ function renderAll(dataA, dataB, cfgA, cfgB) {
   selA.value = keys[0];
   selB.value = keys.length > 1 ? keys[1] : keys[0];
 
-  async function reload() {
-    const cfgA = stations[selA.value];
-    const cfgB = stations[selB.value];
-    document.getElementById('status').textContent = `Loading ${cfgA.name} and ${cfgB.name}…`;
-    const [dataA, dataB] = await Promise.all([loadAll(cfgA, 'A'), loadAll(cfgB, 'B')]);
-    document.getElementById('status').textContent =
-      `${cfgA.name}: ${dataA.loaded}/${dataA.years} years loaded · ${cfgB.name}: ${dataB.loaded}/${dataB.years} years loaded.`;
+  const cache = { keyA: null, keyB: null, dataA: null, dataB: null };
+  const overlapChk = document.getElementById('overlapOnly');
+
+  function rerender() {
+    const cfgA = stations[cache.keyA];
+    const cfgB = stations[cache.keyB];
+    const yearsA = Object.keys(cache.dataA.rowsByYear).map(Number);
+    const yearsB = new Set(Object.keys(cache.dataB.rowsByYear).map(Number));
+
+    let filter = null;
+    let statusText =
+      `${cfgA.name}: ${cache.dataA.loaded}/${cache.dataA.years} years loaded · ` +
+      `${cfgB.name}: ${cache.dataB.loaded}/${cache.dataB.years} years loaded.`;
+
+    if (overlapChk.checked) {
+      const overlap = yearsA.filter(y => yearsB.has(y));
+      filter = new Set(overlap);
+      statusText += overlap.length
+        ? ` Comparing overlap only: ${Math.min(...overlap)}–${Math.max(...overlap)} (${overlap.length} years).`
+        : ' No overlapping years — nothing to compare.';
+    }
+    document.getElementById('status').textContent = statusText;
+
+    const dataA = { byMMDD: buildByMMDD(cache.dataA.rowsByYear, filter), loaded: filter ? filter.size : cache.dataA.loaded };
+    const dataB = { byMMDD: buildByMMDD(cache.dataB.rowsByYear, filter), loaded: filter ? filter.size : cache.dataB.loaded };
     renderAll(dataA, dataB, cfgA, cfgB);
+  }
+
+  async function reload() {
+    const keyA = selA.value, keyB = selB.value;
+    const cfgA = stations[keyA], cfgB = stations[keyB];
+    document.getElementById('status').textContent = `Loading ${cfgA.name} and ${cfgB.name}…`;
+    const [dataA, dataB] = await Promise.all([
+      (cache.keyA === keyA && cache.dataA) ? cache.dataA : loadAll(cfgA),
+      (cache.keyB === keyB && cache.dataB) ? cache.dataB : loadAll(cfgB),
+    ]);
+    Object.assign(cache, { keyA, keyB, dataA, dataB });
+    rerender();
   }
 
   selA.addEventListener('change', reload);
   selB.addEventListener('change', reload);
+  overlapChk.addEventListener('change', rerender);
   await reload();
 })();
 </script>

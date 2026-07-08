@@ -99,6 +99,7 @@
     <a href="weather.html">Daily weather history</a>
     <a href="stats.html">Climate statistics</a>
     <a href="compare.html">Compare stations</a>
+    <a href="extremes.html">Extremes</a>
   </nav>
 </header>
 
@@ -179,6 +180,8 @@ function parseCSV(text) {
   const minIdx    = header.findIndex(h => /min temp/i.test(h));
   const meanIdx   = header.findIndex(h => /mean temp/i.test(h));
   const precipIdx = header.findIndex(h => /total precip/i.test(h));
+  const rainIdx   = header.findIndex(h => /total rain/i.test(h));
+  const snowIdx   = header.findIndex(h => /total snow/i.test(h));
   if (dateIdx === -1) return [];
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
@@ -189,7 +192,7 @@ function parseCSV(text) {
     const max    = maxIdx    !== -1 ? parseFloat(cols[maxIdx])    : NaN;
     const min    = minIdx    !== -1 ? parseFloat(cols[minIdx])    : NaN;
     const mean   = meanIdx   !== -1 ? parseFloat(cols[meanIdx])   : NaN;
-    const precip = precipIdx !== -1 ? parseFloat(cols[precipIdx]) : NaN;
+    const precip = precipFrom(cols, precipIdx, rainIdx, snowIdx);
     rows.push({
       date,
       max:    isFinite(max)    ? max    : null,

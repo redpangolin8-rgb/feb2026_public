@@ -32,6 +32,16 @@
       { "id": 6838 }
     ]
   },
+  "creston_combined": {
+    "name": "Creston (Combined)",
+    "province": "BC",
+    "startYear": 1912,
+    "virtual": true,
+    "mergeSources": [1111, 6838],
+    "segments": [
+      { "id": "creston_combined" }
+    ]
+  },
   "pond_inlet": {
     "name": "Pond Inlet",
     "province": "NU",

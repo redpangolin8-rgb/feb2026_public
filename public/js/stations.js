@@ -29,8 +29,24 @@ function weatherDataURL(cfg, year) {
 }
 
 function stationLabel(cfg) {
+  if (cfg.virtual && cfg.mergeSources) return `Merged ${cfg.mergeSources.join(' + ')}`;
   const ids = cfg.segments.map(s => s.id);
   return ids.length > 1 ? `Stations ${ids.join(' / ')}` : `Station ${ids[0]}`;
+}
+
+// Some older ECCC records (notably Toronto's 1840s) leave Total Precip blank
+// while recording Total Rain and Total Snow separately. ECCC's own convention
+// for those stations is Total Precip = rain (mm) + snow (cm, counted as mm of
+// water at the standard 10:1 ratio) — verified to hold on ~100% of their rows
+// where all three columns are populated — so reconstruct the combined value
+// when the column is blank rather than dropping the day.
+function precipFrom(cols, precipIdx, rainIdx, snowIdx) {
+  const p = precipIdx !== -1 ? parseFloat(cols[precipIdx]) : NaN;
+  if (isFinite(p)) return p;
+  const r = rainIdx !== -1 ? parseFloat(cols[rainIdx]) : NaN;
+  const s = snowIdx !== -1 ? parseFloat(cols[snowIdx]) : NaN;
+  if (!isFinite(r) && !isFinite(s)) return NaN;
+  return (isFinite(r) ? r : 0) + (isFinite(s) ? s : 0);
 }
 
 // Populates a <select> with one option per registered location and wires
