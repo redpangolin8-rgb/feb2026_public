@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dry Spells &amp; Drought</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="js/stations.js"></script>
+<style>
+  :root {
+    --ink: #1a2330;
+    --paper: #f6f4ee;
+    --line: #d8d2c4;
+    --accent: #e8a23c;
+    --dry: #c18c3c;
+    --rain: #5b7a4a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  header { padding: 28px 24px 18px; border-bottom: 2px solid var(--ink); }
+  header h1 { margin: 0; font-size: 1.8rem; letter-spacing: 0.02em; }
+  header p { margin: 6px 0 0; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem; color: #555; }
+  header nav { margin-top: 10px; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem; }
+  header nav a { color: var(--ink); margin-right: 16px; }
+  .station-tag {
+    display: inline-block; margin-top: 10px;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    border: 1px solid var(--ink); padding: 3px 10px; border-radius: 2px;
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px; }
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: end;
+    background: #fff; border: 1px solid var(--line); padding: 16px;
+    border-radius: 4px; margin-bottom: 20px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: #666; }
+  .field select {
+    font-family: inherit; padding: 6px 8px; border: 1px solid var(--line);
+    border-radius: 3px; font-size: 0.9rem; min-width: 140px;
+  }
+  .status {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem;
+    color: #777; margin: 4px 0 18px; min-height: 1.2em;
+  }
+  .headline {
+    background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--dry);
+    border-radius: 4px; padding: 16px 18px; margin-bottom: 20px;
+    font-size: 1.05rem; line-height: 1.5; min-height: 1.5em;
+  }
+  .chart-card {
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 4px; padding: 16px; margin-bottom: 20px;
+  }
+  .chart-card h2 {
+    font-size: 1rem; margin: 0 0 12px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.08em; color: #555;
+  }
+  .rank-wrap { display: flex; flex-wrap: wrap; gap: 24px; }
+  .rank-col { flex: 1; min-width: 280px; }
+  .rank-col h3 {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem;
+    text-transform: uppercase; letter-spacing: 0.07em; color: #555; margin: 0 0 8px;
+  }
+  table.rank {
+    width: 100%; border-collapse: collapse;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.82rem;
+  }
+  table.rank th, table.rank td { padding: 5px 8px; text-align: right; border-bottom: 1px solid var(--line); }
+  table.rank th:nth-child(2), table.rank td:nth-child(2) { text-align: left; white-space: nowrap; }
+  table.rank th { color: #555; font-weight: 600; text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  tr.recent td { font-weight: 700; }
+  tr.recent td:nth-child(2)::after {
+    content: 'recent'; font-weight: 600; font-size: 0.62rem; color: #fff;
+    background: var(--accent); border-radius: 8px; padding: 1px 6px; margin-left: 6px;
+    vertical-align: middle; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .footnote {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
+    color: #999; margin-top: 14px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Dry Spells &amp; Drought</h1>
+  <p>Longest runs without rain and driest stretches on record, and how the present compares · <span id="startYear"></span>–<span id="endYear"></span></p>
+  <span class="station-tag" id="stationTag">Loading…</span>
+  <select id="locationSelect" style="margin-left:10px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:0.78rem;padding:3px 8px;border:1px solid var(--ink);border-radius:2px;"></select>
+  <nav>
+    <a href="index.html">← Home</a>
+    <a href="extremes.html">Extreme precipitation</a>
+    <a href="precip.html">Precipitation</a>
+    <a href="trends.html">Trends</a>
+  </nav>
+</header>
+
+<main>
+  <div class="controls">
+    <div class="field">
+      <label for="windowSelect">Dry-stretch window</label>
+      <select id="windowSelect">
+        <option value="30">30-day</option>
+        <option value="60">60-day</option>
+        <option value="90">90-day</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="status" id="status">Loading data…</div>
+
+  <div class="headline" id="headline"></div>
+
+  <div class="chart-card">
+    <h2>Past 12 months · daily precipitation and running dry-spell length</h2>
+    <canvas id="recentChart" height="260"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Longest dry spell of each year</h2>
+    <canvas id="spellAmaxChart" height="260"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2 id="driestAmaxTitle">Driest stretch of each year</h2>
+    <canvas id="driestAmaxChart" height="260"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2 id="seasonalTitle">When long dry spells happen</h2>
+    <canvas id="seasonalChart" height="240"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>All-time top 10</h2>
+    <div class="rank-wrap">
+      <div class="rank-col"><h3>Longest dry spells</h3><table class="rank" id="spellTable"></table></div>
+      <div class="rank-col"><h3 id="driestTableTitle">Driest 30-day stretches</h3><table class="rank" id="driestTable"></table></div>
+    </div>
+    <p class="footnote">
+      A dry day has less than 1.0&nbsp;mm of precipitation (the standard ETCCDI definition), so
+      trace amounts don't break a spell. A missing or invalid day always ends a dry spell — gaps
+      in old records can shorten historical spells but can never fabricate them. Driest-stretch
+      windows require every day valid and are non-overlapping, like the extreme-precipitation
+      events. Annual charts include only years with at least 300 days of valid data; spells are
+      credited to the year they end in. The seasonal chart uses each spell's midpoint month and
+      splits the record at its midpoint year.
+      <br><br>
+      <strong>A caution on the earliest records:</strong> 19th-century observers often
+      under-recorded light winter snowfall, and a day logged as 0.0&nbsp;mm counts as dry here.
+      Cold-season dry spells from a station's earliest decades may therefore be inflated —
+      treat winter entries from that era with more skepticism than summer ones, and than
+      anything from the modern instrument record.
+    </p>
+  </div>
+</main>
+
+<script>
+let recentChart = null, spellAmaxChart = null, driestAmaxChart = null, seasonalChart = null;
+
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DRY_THRESHOLD = 1.0;   // mm — ETCCDI "dry day"
+const WINDOWS = [30, 60, 90];
+const AMAX_MIN_DAYS = 300;
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const header = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+  const dateIdx   = header.findIndex(h => /date\/time|date$/i.test(h));
+  const precipIdx = header.findIndex(h => /total precip/i.test(h));
+  const rainIdx   = header.findIndex(h => /total rain/i.test(h));
+  const snowIdx   = header.findIndex(h => /total snow/i.test(h));
+  if (dateIdx === -1 || precipIdx === -1) return [];
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.replace(/"/g,'').trim());
+    if (cols.length < header.length) continue;
+    const date = cols[dateIdx];
+    if (!date) continue;
+    const precip = precipFrom(cols, precipIdx, rainIdx, snowIdx);
+    rows.push({ date, precip: isFinite(precip) ? precip : null });
+  }
+  return rows;
+}
+
+async function loadAll(cfg) {
+  const endYear = new Date().getFullYear();
+  const years = Array.from({length: endYear - cfg.startYear + 1}, (_, i) => cfg.startYear + i);
+  document.getElementById('status').textContent = `Loading ${years.length} data files…`;
+  const texts = await Promise.all(years.map(year =>
+    fetch(weatherDataURL(cfg, year)).then(r => r.ok ? r.text() : null).catch(() => null)
+  ));
+  const days = [];
+  let loaded = 0;
+  for (const text of texts) {
+    if (!text) continue;
+    loaded++;
+    for (const row of parseCSV(text)) {
+      days.push({ d: row.date, t: Date.parse(row.date + 'T00:00:00Z') / 86400000, v: row.precip });
+    }
+  }
+  days.sort((a, b) => a.t - b.t);
+  document.getElementById('status').textContent = `Loaded ${loaded} years of data.`;
+  return days;
+}
+
+// Maximal runs of consecutive dry days. Missing values and date gaps end a run
+// — old-record gaps can shorten spells but never fabricate them.
+function buildDryRuns(days) {
+  const runs = [];
+  let runStart = -1;
+  let prevT = null;
+
+  function close(endIdx, ongoing) {
+    if (runStart === -1) return;
+    runs.push({
+      len: endIdx - runStart + 1,
+      startDate: days[runStart].d,
+      endDate: days[endIdx].d,
+      tStart: days[runStart].t,
+      tEnd: days[endIdx].t,
+      year: parseInt(days[endIdx].d.slice(0, 4)),
+      ongoing: !!ongoing,
+    });
+    runStart = -1;
+  }
+
+  for (let i = 0; i < days.length; i++) {
+    const day = days[i];
+    if (prevT !== null && day.t !== prevT + 1) close(i - 1, false);  // date gap
+    const dry = day.v !== null && day.v < DRY_THRESHOLD;
+    if (dry) {
+      if (runStart === -1) runStart = i;
+    } else {
+      close(i - 1, false);
+    }
+    prevT = day.t;
+  }
+  close(days.length - 1, true);  // a run reaching the last observation is "ongoing"
+  return runs;
+}
+
+// Every valid N-day rolling window (consecutive dates, all values present).
+function buildWindows(days, N) {
+  const out = [];
+  for (let i = N - 1; i < days.length; i++) {
+    if (days[i].t - days[i - N + 1].t !== N - 1) continue;
+    let sum = 0, ok = true;
+    for (let j = i - N + 1; j <= i; j++) {
+      if (days[j].v === null) { ok = false; break; }
+      sum += days[j].v;
+    }
+    if (!ok) continue;
+    out.push({
+      tEnd: days[i].t,
+      total: +sum.toFixed(1),
+      startDate: days[i - N + 1].d,
+      endDate: days[i].d,
+      year: parseInt(days[i].d.slice(0, 4)),
+    });
+  }
+  return out;
+}
+
+// Non-overlapping driest windows, driest first.
+function dedupeDriest(windows, N) {
+  const sorted = [...windows].sort((a, b) => a.total - b.total);
+  const used = new Set();
+  const events = [];
+  for (const w of sorted) {
+    let clash = false;
+    for (let t = w.tEnd - N + 1; t <= w.tEnd; t++) {
+      if (used.has(t)) { clash = true; break; }
+    }
+    if (clash) continue;
+    for (let t = w.tEnd - N + 1; t <= w.tEnd; t++) used.add(t);
+    events.push(w);
+  }
+  return events;
+}
+
+function validDaysByYear(days) {
+  const counts = {};
+  for (const day of days) {
+    if (day.v === null) continue;
+    const y = parseInt(day.d.slice(0, 4));
+    counts[y] = (counts[y] || 0) + 1;
+  }
+  return counts;
+}
+
+function fmtRange(startDate, endDate) {
+  return startDate === endDate ? endDate : `${startDate} → ${endDate}`;
+}
+
+function fillTable(tableEl, rows, valueHeader, recentCutoff) {
+  tableEl.textContent = '';
+  const thead = tableEl.createTHead();
+  const hrow = thead.insertRow();
+  ['#', 'Date(s)', valueHeader].forEach(h => {
+    const th = document.createElement('th');
+    th.textContent = h;
+    hrow.appendChild(th);
+  });
+  const tbody = tableEl.createTBody();
+  for (let i = 0; i < Math.min(10, rows.length); i++) {
+    const { dates, value, year } = rows[i];
+    const row = tbody.insertRow();
+    if (year >= recentCutoff) row.className = 'recent';
+    [String(i + 1), dates, value].forEach(text => {
+      const td = row.insertCell();
+      td.textContent = text;
+    });
+  }
+}
+
+function amaxRolling(vals) {
+  return vals.map((_, i) => {
+    const window = vals.slice(Math.max(0, i - 5), i + 6).filter(v => v !== null);
+    return window.length >= 6 ? +(window.reduce((a, b) => a + b, 0) / window.length).toFixed(1) : null;
+  });
+}
+
+function yearBarChart(canvasId, yearLabels, vals, barLabel, yLabel, tooltipFor) {
+  return new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: {
+      labels: yearLabels,
+      datasets: [
+        { label: barLabel, data: vals, backgroundColor: 'rgba(193,140,60,0.7)', order: 2 },
+        { label: '11-yr centered average', data: amaxRolling(vals), type: 'line', borderColor: 'rgba(26,35,48,0.75)', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.3, spanGaps: true, order: 1 },
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { tooltip: { callbacks: { label: ctx =>
+        ctx.dataset.type === 'line' ? `11-yr avg: ${ctx.parsed.y}` : tooltipFor(yearLabels[ctx.dataIndex], ctx.parsed.y)
+      } } },
+      scales: {
+        x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 20 } },
+        y: { title: { display: true, text: yLabel }, beginAtZero: true },
+      }
+    }
+  });
+}
+
+function renderWindowParts(computed, N) {
+  const { driest, driestAmaxByYear } = computed.windows[N];
+  const recentCutoff = new Date().getFullYear() - 4;
+
+  document.getElementById('driestTableTitle').textContent = `Driest ${N}-day stretches`;
+  fillTable(document.getElementById('driestTable'),
+    driest.slice(0, 10).map(w => ({ dates: fmtRange(w.startDate, w.endDate), value: w.total.toFixed(1) + ' mm', year: w.year })),
+    'Total (mm)', recentCutoff);
+
+  const years = Object.keys(driestAmaxByYear).map(Number).sort((a, b) => a - b);
+  const yearLabels = years.length
+    ? Array.from({length: years[years.length-1] - years[0] + 1}, (_, i) => years[0] + i)
+    : [];
+  const vals = yearLabels.map(y => driestAmaxByYear[y] !== undefined ? driestAmaxByYear[y] : null);
+
+  document.getElementById('driestAmaxTitle').textContent = `Driest ${N}-day stretch of each year (mm)`;
+  if (driestAmaxChart) driestAmaxChart.destroy();
+  driestAmaxChart = yearBarChart('driestAmaxChart', yearLabels, vals,
+    `Driest ${N}-day total (mm)`, 'mm', (y, v) => `${v} mm`);
+}
+
+function render(computed, days) {
+  const { runs } = computed;
+  const runsByLen = [...runs].sort((a, b) => b.len - a.len);
+  const record = runsByLen[0] ?? null;
+  const entryBar = runsByLen[9] ?? null;
+  const recentCutoff = new Date().getFullYear() - 4;
+
+  // ── Top-10 longest dry spells table ───────────────────────────────────────
+  fillTable(document.getElementById('spellTable'),
+    runsByLen.slice(0, 10).map(r => ({
+      dates: fmtRange(r.startDate, r.endDate) + (r.ongoing ? ' (ongoing)' : ''),
+      value: String(r.len), year: r.year,
+    })),
+    'Days', recentCutoff);
+
+  // ── Past 12 months: daily precip bars + running dry-spell counter ────────
+  const lastT = days.length ? days[days.length - 1].t : 0;
+  const recentDays = days.filter(day => day.t > lastT - 365);
+  const labels = recentDays.map(day => day.d);
+  const daily = recentDays.map(day => day.v);
+  const dryLen = [];
+  let count = 0, prevT = null;
+  for (const day of recentDays) {
+    if (prevT !== null && day.t !== prevT + 1) count = 0;
+    if (day.v !== null && day.v < DRY_THRESHOLD) count++;
+    else count = 0;
+    dryLen.push(day.v === null ? null : count);
+    prevT = day.t;
+  }
+
+  const datasets = [
+    { label: 'Daily precip (mm)', data: daily, type: 'bar', backgroundColor: 'rgba(91,122,74,0.6)', yAxisID: 'y', order: 3 },
+    { label: 'Dry-spell length (days)', data: dryLen, type: 'line', borderColor: 'rgba(193,140,60,1)', backgroundColor: 'rgba(193,140,60,0.12)', fill: 'origin', borderWidth: 1.5, pointRadius: 0, tension: 0, spanGaps: false, yAxisID: 'y2', order: 2 },
+  ];
+  if (entryBar) {
+    datasets.push({ label: `Top-10 spell threshold (${entryBar.len} days)`, data: labels.map(() => entryBar.len), type: 'line', borderColor: 'rgba(232,162,60,0.9)', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0, yAxisID: 'y2', order: 1 });
+  }
+  if (record) {
+    datasets.push({ label: `Record spell (${record.len} days)`, data: labels.map(() => record.len), type: 'line', borderColor: 'rgba(26,35,48,0.7)', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [2, 3], pointRadius: 0, yAxisID: 'y2', order: 1 });
+  }
+
+  if (recentChart) recentChart.destroy();
+  recentChart = new Chart(document.getElementById('recentChart'), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ticks: { maxRotation: 0, autoSkip: false,
+          callback: (_, i) => labels[i]?.endsWith('-01') ? `${MONTH_NAMES[parseInt(labels[i].slice(5,7)) - 1]} ${labels[i].slice(0,4)}` : '' } },
+        y:  { position: 'left',  title: { display: true, text: 'mm' }, beginAtZero: true },
+        y2: { position: 'right', title: { display: true, text: 'days' }, beginAtZero: true, grid: { drawOnChartArea: false } },
+      }
+    }
+  });
+
+  // ── Longest dry spell of each year ────────────────────────────────────────
+  const validByYear = validDaysByYear(days);
+  const spellAmaxByYear = {};
+  for (const r of runs) {
+    if ((validByYear[r.year] || 0) < AMAX_MIN_DAYS) continue;
+    if (!(r.year in spellAmaxByYear) || r.len > spellAmaxByYear[r.year]) spellAmaxByYear[r.year] = r.len;
+  }
+  const spellYears = Object.keys(spellAmaxByYear).map(Number).sort((a, b) => a - b);
+  const spellYearLabels = spellYears.length
+    ? Array.from({length: spellYears[spellYears.length-1] - spellYears[0] + 1}, (_, i) => spellYears[0] + i)
+    : [];
+  const spellVals = spellYearLabels.map(y => spellAmaxByYear[y] !== undefined ? spellAmaxByYear[y] : null);
+  if (spellAmaxChart) spellAmaxChart.destroy();
+  spellAmaxChart = yearBarChart('spellAmaxChart', spellYearLabels, spellVals,
+    'Longest spell (days)', 'days', (y, v) => `${v} days`);
+
+  // ── Seasonal: midpoint month of the top-50 spells, era split ─────────────
+  const TOP_N = 50;
+  const top = runsByLen.slice(0, TOP_N);
+  const firstYear = days.length ? parseInt(days[0].d.slice(0, 4)) : 0;
+  const lastYear  = days.length ? parseInt(days[days.length - 1].d.slice(0, 4)) : 0;
+  const midYear = Math.floor((firstYear + lastYear) / 2);
+  const eras = [
+    { label: `${firstYear}–${midYear}`,    counts: Array(12).fill(0), years: Array.from({length: 12}, () => []) },
+    { label: `${midYear + 1}–${lastYear}`, counts: Array(12).fill(0), years: Array.from({length: 12}, () => []) },
+  ];
+  for (const r of top) {
+    const midT = Math.floor((r.tStart + r.tEnd) / 2);
+    const m = new Date(midT * 86400000).getUTCMonth();
+    const era = r.year <= midYear ? eras[0] : eras[1];
+    era.counts[m]++;
+    era.years[m].push(r.year);
+  }
+  document.getElementById('seasonalTitle').textContent =
+    `When long dry spells happen · top ${top.length} spells by midpoint month`;
+  if (seasonalChart) seasonalChart.destroy();
+  seasonalChart = new Chart(document.getElementById('seasonalChart'), {
+    type: 'bar',
+    data: {
+      labels: MONTH_NAMES,
+      datasets: [
+        { label: eras[0].label, data: eras[0].counts, backgroundColor: 'rgba(26,35,48,0.4)' },
+        { label: eras[1].label, data: eras[1].counts, backgroundColor: 'rgba(193,140,60,0.75)' },
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      plugins: { tooltip: { callbacks: { afterLabel: ctx => {
+        const yrs = eras[ctx.datasetIndex].years[ctx.dataIndex];
+        return yrs.length ? 'Years: ' + [...yrs].sort((a, b) => a - b).join(', ') : '';
+      } } } },
+      scales: { y: { title: { display: true, text: 'Spells' }, beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+
+  // ── Headline ──────────────────────────────────────────────────────────────
+  const headlineEl = document.getElementById('headline');
+  if (!days.length || !runs.length) {
+    headlineEl.textContent = 'No precipitation data available.';
+    return;
+  }
+  const lastDate = days[days.length - 1].d;
+  const ongoing = runs.find(r => r.ongoing && r.endDate === lastDate);
+  const recentRuns = runs.filter(r => r.tEnd > lastT - 365);
+  let text = '';
+  if (ongoing) {
+    const rankNow = runs.filter(r => r.len > ongoing.len).length + 1;
+    text += `As of the last observation (${lastDate}), a dry spell is ${ongoing.len} day${ongoing.len === 1 ? '' : 's'} old and counting (#${rankNow} all-time if it ended today). `;
+  } else {
+    text += `As of the last observation (${lastDate}), no dry spell is under way. `;
+  }
+  if (recentRuns.length) {
+    const longest = recentRuns.reduce((best, r) => r.len > best.len ? r : best);
+    const rank = runs.filter(r => r.len > longest.len).length + 1;
+    text += `The longest spell of the past 12 months ran ${longest.len} days (${fmtRange(longest.startDate, longest.endDate)}) — #${rank} of ${runs.length.toLocaleString()} spells on record.`;
+  }
+  if (record) {
+    text += ` The all-time record is ${record.len} days (${fmtRange(record.startDate, record.endDate)}).`;
+  }
+  headlineEl.textContent = text;
+}
+
+(async () => {
+  const stations = await loadStations();
+  const activeKey = currentStationKey(stations);
+  const cfg = stations[activeKey];
+
+  initStationNav(document.getElementById('locationSelect'), stations, activeKey);
+  document.getElementById('stationTag').textContent = `${cfg.name} · ${stationLabel(cfg)}`;
+  document.title = `${cfg.name} — Dry Spells & Drought`;
+  document.getElementById('startYear').textContent = cfg.startYear;
+  document.getElementById('endYear').textContent = new Date().getFullYear();
+
+  const days = await loadAll(cfg);
+
+  const validByYear = validDaysByYear(days);
+  const computed = { runs: buildDryRuns(days), windows: {} };
+  for (const N of WINDOWS) {
+    const windows = buildWindows(days, N);
+    const driest = dedupeDriest(windows, N);
+    const driestAmaxByYear = {};
+    for (const w of windows) {
+      if ((validByYear[w.year] || 0) < AMAX_MIN_DAYS) continue;
+      if (!(w.year in driestAmaxByYear) || w.total < driestAmaxByYear[w.year]) driestAmaxByYear[w.year] = w.total;
+    }
+    computed.windows[N] = { driest, driestAmaxByYear };
+  }
+
+  const windowSel = document.getElementById('windowSelect');
+  windowSel.addEventListener('change', () => renderWindowParts(computed, parseInt(windowSel.value)));
+
+  render(computed, days);
+  renderWindowParts(computed, parseInt(windowSel.value));
+})();
+</script>
+</body>
+</html>
