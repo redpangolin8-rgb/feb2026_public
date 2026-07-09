@@ -141,6 +141,15 @@
       <div class="rank-col"><h3>2-day</h3><table class="rank" id="top2"></table></div>
       <div class="rank-col"><h3>3-day</h3><table class="rank" id="top3"></table></div>
     </div>
+  </div>
+
+  <div class="chart-card">
+    <h2 id="recentTopTitle">Top 10 events · last 25 years</h2>
+    <div class="rank-wrap">
+      <div class="rank-col"><h3>1-day</h3><table class="rank" id="recent1"></table></div>
+      <div class="rank-col"><h3>2-day</h3><table class="rank" id="recent2"></table></div>
+      <div class="rank-col"><h3>3-day</h3><table class="rank" id="recent3"></table></div>
+    </div>
     <p class="footnote">
       Events are non-overlapping: a single storm counts once per duration, not once per rolling
       window it spans. Multi-day totals require every day in the window to have valid data.
@@ -277,6 +286,31 @@ function fillTopTable(tableEl, events, recentCutoff) {
     const row = tbody.insertRow();
     if (ev.year >= recentCutoff) row.className = 'recent';
     [String(i + 1), fmtEventDates(ev), ev.total.toFixed(1)].forEach(text => {
+      const td = row.insertCell();
+      td.textContent = text;
+    });
+  }
+}
+
+// Top 10 events from the last 25 years, each with its all-time rank
+// (ties share the rank of the strictly-larger count above them).
+function fillRecentTable(tableEl, events, cutoff25, badgeCutoff) {
+  tableEl.textContent = '';
+  const thead = tableEl.createTHead();
+  const hrow = thead.insertRow();
+  ['#', 'Date(s)', 'Total (mm)', 'All-time #'].forEach(h => {
+    const th = document.createElement('th');
+    th.textContent = h;
+    hrow.appendChild(th);
+  });
+  const tbody = tableEl.createTBody();
+  const recent = events.filter(ev => ev.year >= cutoff25).slice(0, 10);
+  for (let i = 0; i < recent.length; i++) {
+    const ev = recent[i];
+    const allRank = events.filter(e => e.total > ev.total).length + 1;
+    const row = tbody.insertRow();
+    if (ev.year >= badgeCutoff) row.className = 'recent';
+    [String(i + 1), fmtEventDates(ev), ev.total.toFixed(1), '#' + allRank].forEach(text => {
       const td = row.insertCell();
       td.textContent = text;
     });
@@ -468,6 +502,13 @@ function render(computed, days, N) {
   fillTopTable(document.getElementById('top1'), computed[1].events, recentCutoff);
   fillTopTable(document.getElementById('top2'), computed[2].events, recentCutoff);
   fillTopTable(document.getElementById('top3'), computed[3].events, recentCutoff);
+
+  const cutoff25 = new Date().getFullYear() - 24;
+  document.getElementById('recentTopTitle').textContent =
+    `Top 10 events · last 25 years (${cutoff25}–${new Date().getFullYear()})`;
+  fillRecentTable(document.getElementById('recent1'), computed[1].events, cutoff25, recentCutoff);
+  fillRecentTable(document.getElementById('recent2'), computed[2].events, cutoff25, recentCutoff);
+  fillRecentTable(document.getElementById('recent3'), computed[3].events, cutoff25, recentCutoff);
 
   const durationSel = document.getElementById('durationSelect');
   durationSel.addEventListener('change', () => render(computed, days, parseInt(durationSel.value)));

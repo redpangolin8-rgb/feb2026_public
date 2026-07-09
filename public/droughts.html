@@ -145,6 +145,14 @@
       <div class="rank-col"><h3>Longest dry spells</h3><table class="rank" id="spellTable"></table></div>
       <div class="rank-col"><h3 id="driestTableTitle">Driest 30-day stretches</h3><table class="rank" id="driestTable"></table></div>
     </div>
+  </div>
+
+  <div class="chart-card">
+    <h2 id="recentTopTitle">Top 10 · last 25 years</h2>
+    <div class="rank-wrap">
+      <div class="rank-col"><h3>Longest dry spells</h3><table class="rank" id="recentSpellTable"></table></div>
+      <div class="rank-col"><h3 id="recentDriestTitle">Driest 30-day stretches</h3><table class="rank" id="recentDriestTable"></table></div>
+    </div>
     <p class="footnote">
       A dry day has less than 1.0&nbsp;mm of precipitation (the standard ETCCDI definition), so
       trace amounts don't break a spell. A missing or invalid day always ends a dry spell — gaps
@@ -322,6 +330,31 @@ function fillTable(tableEl, rows, valueHeader, recentCutoff) {
   }
 }
 
+// Top 10 from the last 25 years with each entry's all-time rank.
+// rankOf counts strictly-better entries, so ties share a rank.
+function fillRecentTable(tableEl, ordered, cutoff25, badgeCutoff, valueHeader, rowOf, rankOf) {
+  tableEl.textContent = '';
+  const thead = tableEl.createTHead();
+  const hrow = thead.insertRow();
+  ['#', 'Date(s)', valueHeader, 'All-time #'].forEach(h => {
+    const th = document.createElement('th');
+    th.textContent = h;
+    hrow.appendChild(th);
+  });
+  const tbody = tableEl.createTBody();
+  const recent = ordered.filter(item => item.year >= cutoff25).slice(0, 10);
+  for (let i = 0; i < recent.length; i++) {
+    const item = recent[i];
+    const { dates, value } = rowOf(item);
+    const row = tbody.insertRow();
+    if (item.year >= badgeCutoff) row.className = 'recent';
+    [String(i + 1), dates, value, '#' + rankOf(item)].forEach(text => {
+      const td = row.insertCell();
+      td.textContent = text;
+    });
+  }
+}
+
 function amaxRolling(vals) {
   return vals.map((_, i) => {
     const window = vals.slice(Math.max(0, i - 5), i + 6).filter(v => v !== null);
@@ -363,6 +396,13 @@ function renderWindowParts(computed, N) {
     driest.slice(0, 10).map(w => ({ dates: fmtRange(w.startDate, w.endDate), value: w.total.toFixed(1) + ' mm', year: w.year })),
     'Total (mm)', recentCutoff);
 
+  const cutoff25 = new Date().getFullYear() - 24;
+  document.getElementById('recentDriestTitle').textContent = `Driest ${N}-day stretches`;
+  fillRecentTable(document.getElementById('recentDriestTable'), driest, cutoff25, recentCutoff,
+    'Total (mm)',
+    w => ({ dates: fmtRange(w.startDate, w.endDate), value: w.total.toFixed(1) }),
+    w => driest.filter(e => e.total < w.total).length + 1);
+
   const years = Object.keys(driestAmaxByYear).map(Number).sort((a, b) => a - b);
   const yearLabels = years.length
     ? Array.from({length: years[years.length-1] - years[0] + 1}, (_, i) => years[0] + i)
@@ -389,6 +429,14 @@ function render(computed, days) {
       value: String(r.len), year: r.year,
     })),
     'Days', recentCutoff);
+
+  const cutoff25 = new Date().getFullYear() - 24;
+  document.getElementById('recentTopTitle').textContent =
+    `Top 10 · last 25 years (${cutoff25}–${new Date().getFullYear()})`;
+  fillRecentTable(document.getElementById('recentSpellTable'), runsByLen, cutoff25, recentCutoff,
+    'Days',
+    r => ({ dates: fmtRange(r.startDate, r.endDate) + (r.ongoing ? ' (ongoing)' : ''), value: String(r.len) }),
+    r => runsByLen.filter(e => e.len > r.len).length + 1);
 
   // ── Past 12 months: daily precip bars + running dry-spell counter ────────
   const lastT = days.length ? days[days.length - 1].t : 0;

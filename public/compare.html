@@ -128,6 +128,21 @@
   </div>
 
   <div class="chart-card">
+    <h2>Largest 1-day precipitation event of each year (mm)</h2>
+    <canvas id="extremeChart" height="240"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Longest dry spell of each year (days)</h2>
+    <canvas id="spellChart" height="240"></canvas>
+    <p style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:0.75rem;color:#999;margin-top:12px;line-height:1.5;">
+      A dry day has less than 1.0&nbsp;mm of precipitation; a missing day always ends a spell.
+      Both annual charts include only years with at least 300 days of valid precipitation data,
+      and both respect the overlapping-years option.
+    </p>
+  </div>
+
+  <div class="chart-card">
     <h2>Overall summary</h2>
     <table class="summary" id="summaryTable"></table>
   </div>
@@ -135,6 +150,7 @@
 
 <script>
 let maxChart = null, minChart = null, precipChart = null, tempBiasChart = null, precipBiasChart = null;
+let extremeChart = null, spellChart = null;
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTH_DAYS  = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -220,6 +236,76 @@ function buildByMMDD(rowsByYear, yearFilter) {
     }
   }
   return byMMDD;
+}
+
+// Chronological daily precip series for extreme/dry-spell analysis,
+// honouring the same overlap filter as the climatology pools.
+function buildDaysPrecip(rowsByYear, yearFilter) {
+  const days = [];
+  for (const [year, rows] of Object.entries(rowsByYear)) {
+    if (yearFilter && !yearFilter.has(Number(year))) continue;
+    for (const row of rows) {
+      days.push({ d: row.date, t: Date.parse(row.date + 'T00:00:00Z') / 86400000, v: row.precip });
+    }
+  }
+  days.sort((a, b) => a.t - b.t);
+  return days;
+}
+
+// Same rules as the extremes/droughts pages: dry day < 1.0 mm, a missing day
+// or date gap ends a run, annual values need >= 300 valid days that year.
+function annualExtremes(days) {
+  const DRY = 1.0, MIN_DAYS = 300;
+  const valid = {};
+  for (const day of days) {
+    if (day.v === null) continue;
+    const y = parseInt(day.d.slice(0, 4));
+    valid[y] = (valid[y] || 0) + 1;
+  }
+  const ok = y => (valid[y] || 0) >= MIN_DAYS;
+
+  const amax = {};                       // year -> largest 1-day total
+  let recordDay = null;
+  for (const day of days) {
+    if (day.v === null) continue;
+    if (!recordDay || day.v > recordDay.v) recordDay = day;
+    const y = parseInt(day.d.slice(0, 4));
+    if (!ok(y)) continue;
+    if (!(y in amax) || day.v > amax[y]) amax[y] = day.v;
+  }
+
+  const spellMax = {};                   // year (of spell end) -> longest run
+  let recordSpell = 0;
+  let run = 0, lastDryYear = null, prevT = null;
+  const credit = () => {
+    if (run > 0) {
+      if (run > recordSpell) recordSpell = run;
+      if (lastDryYear !== null && ok(lastDryYear) &&
+          (!(lastDryYear in spellMax) || run > spellMax[lastDryYear])) {
+        spellMax[lastDryYear] = run;
+      }
+    }
+    run = 0;
+    lastDryYear = null;
+  };
+  for (const day of days) {
+    if (prevT !== null && day.t !== prevT + 1) credit();
+    if (day.v !== null && day.v < DRY) {
+      run++;
+      lastDryYear = parseInt(day.d.slice(0, 4));
+    } else {
+      credit();
+    }
+    prevT = day.t;
+  }
+  credit();
+
+  return {
+    amax,
+    spellMax,
+    recordDay: recordDay ? { v: recordDay.v, d: recordDay.d } : null,
+    recordSpell: recordSpell > 0 ? recordSpell : null,
+  };
 }
 
 function stats(values) {
@@ -324,12 +410,48 @@ function overallStats(byMMDD, variable) {
   return stats(all);
 }
 
+// Two stations' annual series overlaid on one chart (A solid, B dashed).
+function annualOverlayChart(canvasId, mapA, mapB, nameA, nameB, yLabel) {
+  const ys = [...Object.keys(mapA), ...Object.keys(mapB)].map(Number);
+  const labels = ys.length
+    ? Array.from({length: Math.max(...ys) - Math.min(...ys) + 1}, (_, i) => Math.min(...ys) + i)
+    : [];
+  const dataOf = map => labels.map(y => y in map ? +(+map[y]).toFixed(1) : null);
+  return new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: nameA, data: dataOf(mapA), borderColor: `rgba(${COLOR_A},1)`, backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.1, spanGaps: false },
+        { label: nameB, data: dataOf(mapB), borderColor: `rgba(${COLOR_B},1)`, backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.1, spanGaps: false, borderDash: [6, 3] },
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 20 } },
+        y: { title: { display: true, text: yLabel }, beginAtZero: true },
+      }
+    }
+  });
+}
+
 function renderSummary(dataA, dataB, cfgA, cfgB) {
+  const avg = map => {
+    const vals = Object.values(map);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  };
   const rows = [
     { label: 'Years compared', a: dataA.loaded, b: dataB.loaded, decimals: 0 },
     { label: 'Avg daily max temp (°C)', a: overallStats(dataA.byMMDD, 'max').mean, b: overallStats(dataB.byMMDD, 'max').mean, decimals: 2 },
     { label: 'Avg daily min temp (°C)', a: overallStats(dataA.byMMDD, 'min').mean, b: overallStats(dataB.byMMDD, 'min').mean, decimals: 2 },
     { label: 'Avg daily precip (mm)',   a: overallStats(dataA.byMMDD, 'precip').mean, b: overallStats(dataB.byMMDD, 'precip').mean, decimals: 2 },
+    { label: 'Record 1-day precip (mm)', a: dataA.ext.recordDay?.v ?? null, b: dataB.ext.recordDay?.v ?? null, decimals: 1 },
+    { label: 'Avg annual max 1-day precip (mm)', a: avg(dataA.ext.amax), b: avg(dataB.ext.amax), decimals: 1 },
+    { label: 'Record dry spell (days)', a: dataA.ext.recordSpell, b: dataB.ext.recordSpell, decimals: 0 },
+    { label: 'Avg longest annual dry spell (days)', a: avg(dataA.ext.spellMax), b: avg(dataB.ext.spellMax), decimals: 1 },
   ];
   const table = document.getElementById('summaryTable');
   table.textContent = '';
@@ -414,6 +536,12 @@ function renderAll(dataA, dataB, cfgA, cfgB) {
   if (precipBiasChart) precipBiasChart.destroy();
   precipBiasChart = makeBiasChart('precipBiasChart', precipDiff, 'mm (A − B)', '91,122,74');
 
+  if (extremeChart) extremeChart.destroy();
+  extremeChart = annualOverlayChart('extremeChart', dataA.ext.amax, dataB.ext.amax, cfgA.name, cfgB.name, 'mm');
+
+  if (spellChart) spellChart.destroy();
+  spellChart = annualOverlayChart('spellChart', dataA.ext.spellMax, dataB.ext.spellMax, cfgA.name, cfgB.name, 'days');
+
   renderSummary(dataA, dataB, cfgA, cfgB);
 }
 
@@ -458,8 +586,10 @@ function renderAll(dataA, dataB, cfgA, cfgB) {
     }
     document.getElementById('status').textContent = statusText;
 
-    const dataA = { byMMDD: buildByMMDD(cache.dataA.rowsByYear, filter), loaded: filter ? filter.size : cache.dataA.loaded };
-    const dataB = { byMMDD: buildByMMDD(cache.dataB.rowsByYear, filter), loaded: filter ? filter.size : cache.dataB.loaded };
+    const dataA = { byMMDD: buildByMMDD(cache.dataA.rowsByYear, filter), loaded: filter ? filter.size : cache.dataA.loaded,
+                    ext: annualExtremes(buildDaysPrecip(cache.dataA.rowsByYear, filter)) };
+    const dataB = { byMMDD: buildByMMDD(cache.dataB.rowsByYear, filter), loaded: filter ? filter.size : cache.dataB.loaded,
+                    ext: annualExtremes(buildDaysPrecip(cache.dataB.rowsByYear, filter)) };
     renderAll(dataA, dataB, cfgA, cfgB);
   }
 
