@@ -86,6 +86,10 @@
     font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
     color: #999; margin-top: 14px; line-height: 1.5;
   }
+  .chart-note {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.82rem;
+    color: #666; margin: -4px 0 12px;
+  }
 </style>
 </head>
 <body>
@@ -122,6 +126,7 @@
 
   <div class="chart-card">
     <h2 id="recentTitle">Past 12 months vs historical extremes</h2>
+    <p class="chart-note" id="recentContext"></p>
     <canvas id="recentChart" height="260"></canvas>
   </div>
 
@@ -424,12 +429,14 @@ function render(computed, days, N) {
   if (entryBar) {
     datasets.push({ label: `Top-10 threshold (${entryBar.total.toFixed(1)} mm)`, data: labels.map(() => entryBar.total), type: 'line', borderColor: 'rgba(232,162,60,0.9)', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0, order: 1 });
   }
-  if (record) {
-    datasets.push({ label: `All-time record (${record.total.toFixed(1)} mm)`, data: labels.map(() => record.total), type: 'line', borderColor: 'rgba(26,35,48,0.7)', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [2, 3], pointRadius: 0, order: 1 });
-  }
 
   document.getElementById('recentTitle').textContent =
     `Past 12 months vs historical ${noun} extremes`;
+  // The record is stated as text rather than plotted — as a constant line it
+  // stretches the y-axis and squashes the daily bars into unreadability.
+  document.getElementById('recentContext').textContent = record
+    ? `All-time ${noun} record: ${record.total.toFixed(1)} mm (${fmtEventDates(record)})`
+    : '';
   if (recentChart) recentChart.destroy();
   recentChart = new Chart(document.getElementById('recentChart'), {
     type: 'bar',
