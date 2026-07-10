@@ -168,8 +168,9 @@
 </main>
 
 <footer>
-  <span id="footerText">Data source: Environment and Climate Change Canada (ECCC)</span>
+  Data source: Environment and Climate Change Canada (ECCC)
   · <a href="diagnostics.html" style="color:inherit">Data diagnostics</a>
+  · <a href="https://docs.google.com/forms/d/e/1FAIpQLSf3edcuuwyR_qPLTpcBCiaQry_Y_h8Swbpqq5qh4e6nT4kX2A/viewform" target="_blank" rel="noopener noreferrer" style="color:inherit">Send feedback</a>
 </footer>
 
 <script>
@@ -183,15 +184,6 @@
   document.getElementById('startYear').textContent = minStartYear;
   document.getElementById('stationTag').textContent =
     `${cfgs.length} location${cfgs.length === 1 ? '' : 's'} · ECCC`;
-
-  const segLines = cfgs.flatMap(c => c.segments.map(seg => {
-    const range = seg.from !== undefined && seg.until !== undefined ? `${seg.from}–${seg.until - 1}`
-                : seg.from !== undefined ? `${seg.from}–${y}`
-                : seg.until !== undefined ? `${c.startYear}–${seg.until - 1}` : `${c.startYear}–${y}`;
-    return `Station ${seg.id} (${range})`;
-  }));
-  document.getElementById('footerText').textContent =
-    `Data source: Environment and Climate Change Canada (ECCC) · ${segLines.join(', ')}`;
 })();
 </script>
 </body>
