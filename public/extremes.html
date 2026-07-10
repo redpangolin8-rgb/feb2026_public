@@ -81,6 +81,7 @@
     background: var(--accent); border-radius: 8px; padding: 1px 6px; margin-left: 6px;
     vertical-align: middle; text-transform: uppercase; letter-spacing: 0.04em;
   }
+  table.rank tr.notable td { background: rgba(232,162,60,0.14); }
   .footnote {
     font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
     color: #999; margin-top: 14px; line-height: 1.5;
@@ -122,6 +123,18 @@
   <div class="chart-card">
     <h2 id="recentTitle">Past 12 months vs historical extremes</h2>
     <canvas id="recentChart" height="260"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Each of the last 12 months, ranked against the same month in all years</h2>
+    <table class="rank" id="monthlyRankTable"></table>
+    <p class="footnote">
+      Each month is ranked against the same calendar month across the whole record (Junes
+      against Junes), so seasonality doesn't skew the comparison — by its wettest single day
+      and by its total precipitation, both from the wettest side. Months need at least 25 days
+      of valid data to be ranked; the current in-progress month shows as “—”. Highlighted rows
+      rank in that month's all-time top 10 on either measure.
+    </p>
   </div>
 
   <div class="chart-card">
@@ -208,6 +221,12 @@ async function loadAll(cfg) {
     }
   }
   days.sort((a, b) => a.t - b.t);
+  // ECCC's current-year file contains date rows for months that haven't
+  // happened yet (all values blank). Trim trailing no-data days so "the last
+  // observation" and "the past 12 months" anchor to real data.
+  let end = days.length - 1;
+  while (end >= 0 && days[end].v === null) end--;
+  days.length = end + 1;
   document.getElementById('status').textContent = `Loaded ${loaded} years of data.`;
   return days;
 }
@@ -311,6 +330,69 @@ function fillRecentTable(tableEl, events, cutoff25, badgeCutoff) {
     const row = tbody.insertRow();
     if (ev.year >= badgeCutoff) row.className = 'recent';
     [String(i + 1), fmtEventDates(ev), ev.total.toFixed(1), '#' + allRank].forEach(text => {
+      const td = row.insertCell();
+      td.textContent = text;
+    });
+  }
+}
+
+// Each of the last 12 calendar months, ranked by its wettest single day
+// against the same calendar month across the whole record.
+function fillMonthlyRank(days) {
+  const MIN_VALID = 25;
+  const byMonth = {};  // 'YYYY-MM' -> {maxDay, maxDate, total, valid}
+  for (const day of days) {
+    if (day.v === null) continue;
+    const key = day.d.slice(0, 7);
+    const m = byMonth[key] || (byMonth[key] = { maxDay: -1, maxDate: null, total: 0, valid: 0 });
+    m.valid++;
+    m.total += day.v;
+    if (day.v > m.maxDay) { m.maxDay = day.v; m.maxDate = day.d; }
+  }
+  const cohorts = Array.from({length: 12}, () => []);
+  for (const [key, m] of Object.entries(byMonth)) {
+    if (m.valid >= MIN_VALID) cohorts[parseInt(key.slice(5, 7)) - 1].push({ maxDay: m.maxDay, total: m.total });
+  }
+
+  const tableEl = document.getElementById('monthlyRankTable');
+  tableEl.textContent = '';
+  const thead = tableEl.createTHead();
+  const hrow = thead.insertRow();
+  ['Month', 'Wettest day (mm)', 'Date', 'Day rank', 'Total (mm)', 'Total rank'].forEach(h => {
+    const th = document.createElement('th');
+    th.textContent = h;
+    hrow.appendChild(th);
+  });
+
+  const rows = [];
+  if (days.length) {
+    let y = parseInt(days[days.length - 1].d.slice(0, 4));
+    let mo = parseInt(days[days.length - 1].d.slice(5, 7));
+    for (let i = 0; i < 12; i++) {
+      const key = `${y}-${String(mo).padStart(2, '0')}`;
+      const m = byMonth[key];
+      const cohort = cohorts[mo - 1];
+      if (m && m.valid >= MIN_VALID && cohort.length) {
+        const dayRank   = cohort.filter(c => c.maxDay > m.maxDay).length + 1;
+        const totalRank = cohort.filter(c => c.total > m.total).length + 1;
+        rows.push({ label: `${MONTH_NAMES[mo - 1]} ${y}`, m, dayRank, totalRank, n: cohort.length });
+      } else {
+        rows.push({ label: `${MONTH_NAMES[mo - 1]} ${y}`, m: null });
+      }
+      mo--; if (mo === 0) { mo = 12; y--; }
+    }
+    rows.reverse();  // chronological, oldest first
+  }
+
+  const tbody = tableEl.createTBody();
+  for (const r of rows) {
+    const row = tbody.insertRow();
+    if (r.m && (r.dayRank <= 10 || r.totalRank <= 10)) row.className = 'notable';
+    const cells = r.m
+      ? [r.label, r.m.maxDay.toFixed(1), r.m.maxDate, `#${r.dayRank} of ${r.n}`,
+         r.m.total.toFixed(1), `#${r.totalRank} of ${r.n}`]
+      : [r.label, '—', '—', '—', '—', '—'];
+    cells.forEach(text => {
       const td = row.insertCell();
       td.textContent = text;
     });
@@ -509,6 +591,7 @@ function render(computed, days, N) {
   fillRecentTable(document.getElementById('recent1'), computed[1].events, cutoff25, recentCutoff);
   fillRecentTable(document.getElementById('recent2'), computed[2].events, cutoff25, recentCutoff);
   fillRecentTable(document.getElementById('recent3'), computed[3].events, cutoff25, recentCutoff);
+  fillMonthlyRank(days);
 
   const durationSel = document.getElementById('durationSelect');
   durationSel.addEventListener('change', () => render(computed, days, parseInt(durationSel.value)));
