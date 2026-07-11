@@ -416,7 +416,12 @@ function stats(values) {
           ticks: {
             maxRotation: 0,
             autoSkip: false,
-            callback: (_, i) => tsQLabels[i]?.startsWith('Q1') ? tsQLabels[i].slice(3) : '',
+            callback: (_, i) => {
+              const lbl = tsQLabels[i];
+              if (!lbl?.startsWith('Q1')) return '';
+              const year = parseInt(lbl.slice(3));
+              return year % 10 === 0 ? String(year) : '';
+            },
           }
         },
         y: { title: { display: true, text: 'mm' }, beginAtZero: true },

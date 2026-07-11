@@ -63,23 +63,29 @@
     text-transform: uppercase; letter-spacing: 0.08em; color: #555;
   }
   .rank-wrap { display: flex; flex-wrap: wrap; gap: 24px; }
-  .rank-col { flex: 1; min-width: 280px; }
+  .rank-col { flex: 1 1 300px; min-width: 0; max-width: 100%; }
   .rank-col h3 {
     font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem;
     text-transform: uppercase; letter-spacing: 0.07em; color: #555; margin: 0 0 8px;
   }
+  .rank-scroll { overflow-x: auto; }
   table.rank {
     width: 100%; border-collapse: collapse;
-    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.82rem;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem;
   }
-  table.rank th, table.rank td { padding: 5px 8px; text-align: right; border-bottom: 1px solid var(--line); }
-  table.rank th:nth-child(2), table.rank td:nth-child(2) { text-align: left; white-space: nowrap; }
-  table.rank th { color: #555; font-weight: 600; text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  table.rank th, table.rank td {
+    padding: 5px 6px; text-align: right; border-bottom: 1px solid var(--line);
+    overflow-wrap: break-word;
+  }
+  table.rank th.col-date, table.rank td.col-date,
+  table.rank th.col-label, table.rank td.col-label { text-align: left; }
+  table.rank th { color: #555; font-weight: 600; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.04em; }
   tr.recent td { font-weight: 700; }
-  tr.recent td:nth-child(2)::after {
-    content: 'recent'; font-weight: 600; font-size: 0.62rem; color: #fff;
-    background: var(--accent); border-radius: 8px; padding: 1px 6px; margin-left: 6px;
-    vertical-align: middle; text-transform: uppercase; letter-spacing: 0.04em;
+  tr.recent td.col-date::after {
+    content: 'recent'; display: block; margin-top: 2px;
+    font-weight: 600; font-size: 0.62rem; color: #fff;
+    background: var(--accent); border-radius: 8px; padding: 1px 6px;
+    text-transform: uppercase; letter-spacing: 0.04em; width: fit-content;
   }
   table.rank tr.notable td { background: rgba(232,162,60,0.14); }
   .footnote {
@@ -135,7 +141,7 @@
 
   <div class="chart-card">
     <h2>Each of the last 12 months, ranked against the same month in all years</h2>
-    <table class="rank" id="monthlyRankTable"></table>
+    <div class="rank-scroll"><table class="rank" id="monthlyRankTable"></table></div>
     <p class="footnote">
       Each month is ranked against the same calendar month across the whole record (Junes
       against Junes), so seasonality doesn't skew the comparison — by its wettest single day
@@ -158,18 +164,18 @@
   <div class="chart-card">
     <h2>All-time top 10 events</h2>
     <div class="rank-wrap">
-      <div class="rank-col"><h3>1-day</h3><table class="rank" id="top1"></table></div>
-      <div class="rank-col"><h3>2-day</h3><table class="rank" id="top2"></table></div>
-      <div class="rank-col"><h3>3-day</h3><table class="rank" id="top3"></table></div>
+      <div class="rank-col"><h3>1-day</h3><div class="rank-scroll"><table class="rank" id="top1"></table></div></div>
+      <div class="rank-col"><h3>2-day</h3><div class="rank-scroll"><table class="rank" id="top2"></table></div></div>
+      <div class="rank-col"><h3>3-day</h3><div class="rank-scroll"><table class="rank" id="top3"></table></div></div>
     </div>
   </div>
 
   <div class="chart-card">
     <h2 id="recentTopTitle">Top 10 events · last 25 years</h2>
     <div class="rank-wrap">
-      <div class="rank-col"><h3>1-day</h3><table class="rank" id="recent1"></table></div>
-      <div class="rank-col"><h3>2-day</h3><table class="rank" id="recent2"></table></div>
-      <div class="rank-col"><h3>3-day</h3><table class="rank" id="recent3"></table></div>
+      <div class="rank-col"><h3>1-day</h3><div class="rank-scroll"><table class="rank" id="recent1"></table></div></div>
+      <div class="rank-col"><h3>2-day</h3><div class="rank-scroll"><table class="rank" id="recent2"></table></div></div>
+      <div class="rank-col"><h3>3-day</h3><div class="rank-scroll"><table class="rank" id="recent3"></table></div></div>
     </div>
     <p class="footnote">
       Events are non-overlapping: a single storm counts once per duration, not once per rolling
@@ -298,24 +304,28 @@ function fmtEventDates(ev) {
   return ev.startDate === ev.endDate ? ev.endDate : `${ev.startDate} → ${ev.endDate}`;
 }
 
+// Inserts a header or body row, tagging the given column indices with a
+// class (e.g. 'col-date') instead of styling by position, since different
+// tables on this page put the date/label column in different places.
+function fillRow(rowEl, texts, isHeader, classByIndex) {
+  texts.forEach((text, i) => {
+    const cell = isHeader ? document.createElement('th') : rowEl.insertCell();
+    cell.textContent = text;
+    if (classByIndex && classByIndex[i]) cell.className = classByIndex[i];
+    if (isHeader) rowEl.appendChild(cell);
+  });
+}
+
 function fillTopTable(tableEl, events, recentCutoff) {
   tableEl.textContent = '';
   const thead = tableEl.createTHead();
-  const hrow = thead.insertRow();
-  ['#', 'Date(s)', 'Total (mm)'].forEach(h => {
-    const th = document.createElement('th');
-    th.textContent = h;
-    hrow.appendChild(th);
-  });
+  fillRow(thead.insertRow(), ['#', 'Date(s)', 'Total (mm)'], true, { 1: 'col-date' });
   const tbody = tableEl.createTBody();
   for (let i = 0; i < Math.min(10, events.length); i++) {
     const ev = events[i];
     const row = tbody.insertRow();
     if (ev.year >= recentCutoff) row.className = 'recent';
-    [String(i + 1), fmtEventDates(ev), ev.total.toFixed(1)].forEach(text => {
-      const td = row.insertCell();
-      td.textContent = text;
-    });
+    fillRow(row, [String(i + 1), fmtEventDates(ev), ev.total.toFixed(1)], false, { 1: 'col-date' });
   }
 }
 
@@ -324,12 +334,7 @@ function fillTopTable(tableEl, events, recentCutoff) {
 function fillRecentTable(tableEl, events, cutoff25, badgeCutoff) {
   tableEl.textContent = '';
   const thead = tableEl.createTHead();
-  const hrow = thead.insertRow();
-  ['#', 'Date(s)', 'Total (mm)', 'All-time #'].forEach(h => {
-    const th = document.createElement('th');
-    th.textContent = h;
-    hrow.appendChild(th);
-  });
+  fillRow(thead.insertRow(), ['#', 'Date(s)', 'Total (mm)', 'All-time #'], true, { 1: 'col-date' });
   const tbody = tableEl.createTBody();
   const recent = events.filter(ev => ev.year >= cutoff25).slice(0, 10);
   for (let i = 0; i < recent.length; i++) {
@@ -337,10 +342,7 @@ function fillRecentTable(tableEl, events, cutoff25, badgeCutoff) {
     const allRank = events.filter(e => e.total > ev.total).length + 1;
     const row = tbody.insertRow();
     if (ev.year >= badgeCutoff) row.className = 'recent';
-    [String(i + 1), fmtEventDates(ev), ev.total.toFixed(1), '#' + allRank].forEach(text => {
-      const td = row.insertCell();
-      td.textContent = text;
-    });
+    fillRow(row, [String(i + 1), fmtEventDates(ev), ev.total.toFixed(1), '#' + allRank], false, { 1: 'col-date' });
   }
 }
 
@@ -365,12 +367,7 @@ function fillMonthlyRank(days) {
   const tableEl = document.getElementById('monthlyRankTable');
   tableEl.textContent = '';
   const thead = tableEl.createTHead();
-  const hrow = thead.insertRow();
-  ['Month', 'Wettest day (mm)', 'Date', 'Day rank', 'Total (mm)', 'Total rank'].forEach(h => {
-    const th = document.createElement('th');
-    th.textContent = h;
-    hrow.appendChild(th);
-  });
+  fillRow(thead.insertRow(), ['Month', 'Wettest day (mm)', 'Date', 'Day rank', 'Total (mm)', 'Total rank'], true, { 0: 'col-label', 2: 'col-date' });
 
   const rows = [];
   if (days.length) {
@@ -400,10 +397,7 @@ function fillMonthlyRank(days) {
       ? [r.label, r.m.maxDay.toFixed(1), r.m.maxDate, `#${r.dayRank} of ${r.n}`,
          r.m.total.toFixed(1), `#${r.totalRank} of ${r.n}`]
       : [r.label, '—', '—', '—', '—', '—'];
-    cells.forEach(text => {
-      const td = row.insertCell();
-      td.textContent = text;
-    });
+    fillRow(row, cells, false, { 0: 'col-label', 2: 'col-date' });
   }
 }
 
