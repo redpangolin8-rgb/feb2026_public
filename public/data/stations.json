@@ -1,9 +1,10 @@
 {
   "fredericton": {
-    "name": "Fredericton Airport",
+    "name": "Fredericton",
     "province": "NB",
-    "startYear": 1951,
+    "startYear": 1871,
     "segments": [
+      { "id": 6159, "until": 1951 },
       { "id": 6157, "until": 2010 },
       { "id": 48568, "from": 2010 }
     ]
@@ -117,6 +118,63 @@
     "segments": [
       { "id": 5051, "until": 2018 },
       { "id": 31688, "from": 2018 }
+    ]
+  },
+  "mactaquac": {
+    "name": "Mactaquac Provincial Park",
+    "province": "NB",
+    "startYear": 1973,
+    "segments": [
+      { "id": 6194 }
+    ]
+  },
+  "saint_john": {
+    "name": "Saint John",
+    "province": "NB",
+    "startYear": 1871,
+    "segments": [
+      { "id": 6248 }
+    ]
+  },
+  "saint_john_a": {
+    "name": "Saint John A",
+    "province": "NB",
+    "startYear": 1946,
+    "segments": [
+      { "id": 6250, "until": 2012 },
+      { "id": 50310, "from": 2012 }
+    ]
+  },
+  "point_lepreau": {
+    "name": "Point Lepreau",
+    "province": "NB",
+    "startYear": 1872,
+    "segments": [
+      { "id": 6229 }
+    ]
+  },
+  "point_lepreau_cs": {
+    "name": "Point Lepreau CS",
+    "province": "NB",
+    "startYear": 1992,
+    "segments": [
+      { "id": 27746 }
+    ]
+  },
+  "georgetown": {
+    "name": "Georgetown WWTP",
+    "province": "ON",
+    "startYear": 1962,
+    "segments": [
+      { "id": 4923 }
+    ]
+  },
+  "brampton": {
+    "name": "Brampton",
+    "province": "ON",
+    "startYear": 1870,
+    "segments": [
+      { "id": 4875 }
     ]
   }
 }
