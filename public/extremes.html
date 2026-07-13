@@ -241,7 +241,8 @@ async function loadAll(cfg) {
   let end = days.length - 1;
   while (end >= 0 && days[end].v === null) end--;
   days.length = end + 1;
-  document.getElementById('status').textContent = `Loaded ${loaded} years of data.`;
+  const range = days.length ? ` (${days[0].d.slice(0,4)}–${days[days.length-1].d.slice(0,4)})` : '';
+  document.getElementById('status').textContent = `Loaded ${loaded} years of data${range}${stationCompositionNote(cfg)}.`;
   return days;
 }
 

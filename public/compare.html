@@ -554,12 +554,7 @@ function renderAll(dataA, dataB, cfgA, cfgB) {
 
   for (const sel of [selA, selB]) {
     sel.textContent = '';
-    for (const [key, cfg] of Object.entries(stations)) {
-      const opt = document.createElement('option');
-      opt.value = key;
-      opt.textContent = cfg.name;
-      sel.appendChild(opt);
-    }
+    buildProvinceOptions(sel, stations, null);
   }
   selA.value = keys[0];
   selB.value = keys.length > 1 ? keys[1] : keys[0];
@@ -570,13 +565,17 @@ function renderAll(dataA, dataB, cfgA, cfgB) {
   function rerender() {
     const cfgA = stations[cache.keyA];
     const cfgB = stations[cache.keyB];
-    const yearsA = Object.keys(cache.dataA.rowsByYear).map(Number);
-    const yearsB = new Set(Object.keys(cache.dataB.rowsByYear).map(Number));
+    const yearsAArr = Object.keys(cache.dataA.rowsByYear).map(Number);
+    const yearsBArr = Object.keys(cache.dataB.rowsByYear).map(Number);
+    const yearsA = yearsAArr;
+    const yearsB = new Set(yearsBArr);
+    const rangeA = yearsAArr.length ? ` (${Math.min(...yearsAArr)}–${Math.max(...yearsAArr)})` : '';
+    const rangeB = yearsBArr.length ? ` (${Math.min(...yearsBArr)}–${Math.max(...yearsBArr)})` : '';
 
     let filter = null;
     let statusText =
-      `${cfgA.name}: ${cache.dataA.loaded}/${cache.dataA.years} years loaded · ` +
-      `${cfgB.name}: ${cache.dataB.loaded}/${cache.dataB.years} years loaded.`;
+      `${cfgA.name}: ${cache.dataA.loaded}/${cache.dataA.years} years loaded${rangeA}${stationCompositionNote(cfgA)} · ` +
+      `${cfgB.name}: ${cache.dataB.loaded}/${cache.dataB.years} years loaded${rangeB}${stationCompositionNote(cfgB)}.`;
 
     if (overlapChk.checked) {
       const overlap = yearsA.filter(y => yearsB.has(y));

@@ -156,9 +156,12 @@ async function loadAll(cfg) {
   }));
   const byMMDD = {};
   let loaded = 0;
-  for (const text of texts) {
+  const loadedYears = [];
+  for (let i = 0; i < texts.length; i++) {
+    const text = texts[i];
     if (!text) continue;
     loaded++;
+    loadedYears.push(years[i]);
     for (const row of parseCSV(text)) {
       const key = row.date.slice(5);
       if (!byMMDD[key]) byMMDD[key] = { max: [], min: [], precip: [] };
@@ -167,7 +170,8 @@ async function loadAll(cfg) {
       if (row.precip !== null) byMMDD[key].precip.push(row.precip);
     }
   }
-  document.getElementById('status').textContent = `Loaded ${loaded} years of data.`;
+  const range = loadedYears.length ? ` (${Math.min(...loadedYears)}–${Math.max(...loadedYears)})` : '';
+  document.getElementById('status').textContent = `Loaded ${loaded} years of data${range}${stationCompositionNote(cfg)}.`;
   return byMMDD;
 }
 

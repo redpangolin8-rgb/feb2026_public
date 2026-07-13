@@ -176,5 +176,21 @@
     "segments": [
       { "id": 4875 }
     ]
+  },
+  "quatsino": {
+    "name": "Quatsino",
+    "province": "BC",
+    "startYear": 1895,
+    "segments": [
+      { "id": 271 }
+    ]
+  },
+  "comox": {
+    "name": "Comox A",
+    "province": "BC",
+    "startYear": 1944,
+    "segments": [
+      { "id": 155 }
+    ]
   }
 }

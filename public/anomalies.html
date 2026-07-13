@@ -142,7 +142,9 @@ async function loadAll(cfg) {
       if (row.min !== null) { byMMDD[mmdd].min.push(row.min); byYear[year].min[mmdd] = row.min; }
     }
   }
-  document.getElementById('status').textContent = `Loaded ${loaded} years of data.`;
+  const loadedYears = Object.keys(byYear).map(Number);
+  const range = loadedYears.length ? ` (${Math.min(...loadedYears)}–${Math.max(...loadedYears)})` : '';
+  document.getElementById('status').textContent = `Loaded ${loaded} years of data${range}${stationCompositionNote(cfg)}.`;
   return { byMMDD, byYear };
 }
 

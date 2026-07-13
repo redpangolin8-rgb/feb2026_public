@@ -34,6 +34,22 @@ function stationLabel(cfg) {
   return ids.length > 1 ? `Stations ${ids.join(' / ')}` : `Station ${ids[0]}`;
 }
 
+// A short note for status lines flagging when a location's record is
+// composed of more than one underlying ECCC station — either day-by-day
+// merged (a virtual entry) or spliced end-to-end across eras (multiple
+// segments). Returns '' for an ordinary single-station location, since
+// there's nothing worth calling out.
+function stationCompositionNote(cfg) {
+  if (cfg.virtual && cfg.mergeSources) {
+    return ` — merged day-by-day from stations ${cfg.mergeSources.join(' + ')}`;
+  }
+  const ids = cfg.segments.map(s => s.id);
+  if (ids.length > 1) {
+    return ` — spliced from ${ids.length} stations (${ids.join(' → ')})`;
+  }
+  return '';
+}
+
 // Some older ECCC records (notably Toronto's 1840s) leave Total Precip blank
 // while recording Total Rain and Total Snow separately. ECCC's own convention
 // for those stations is Total Precip = rain (mm) + snow (cm, counted as mm of
@@ -49,17 +65,61 @@ function precipFrom(cols, precipIdx, rainIdx, snowIdx) {
   return (isFinite(r) ? r : 0) + (isFinite(s) ? s : 0);
 }
 
-// Populates a <select> with one option per registered location and wires
-// it to navigate to the same page with ?station=<key> on change.
+const PROVINCE_NAMES = {
+  AB: 'Alberta', BC: 'British Columbia', MB: 'Manitoba', NB: 'New Brunswick',
+  NL: 'Newfoundland and Labrador', NS: 'Nova Scotia', NT: 'Northwest Territories',
+  NU: 'Nunavut', ON: 'Ontario', PE: 'Prince Edward Island', QC: 'Quebec',
+  SK: 'Saskatchewan', YT: 'Yukon',
+};
+
+// Groups [key, cfg] entries by province/territory, sorted by full province
+// name, with locations within each group sorted alphabetically by display name.
+function groupStationsByProvince(stations) {
+  const groups = {};
+  for (const [key, cfg] of Object.entries(stations)) {
+    const prov = cfg.province || '?';
+    if (!groups[prov]) groups[prov] = [];
+    groups[prov].push([key, cfg]);
+  }
+  const provCodes = Object.keys(groups).sort((a, b) =>
+    (PROVINCE_NAMES[a] || a).localeCompare(PROVINCE_NAMES[b] || b));
+  for (const prov of provCodes) {
+    groups[prov].sort((a, b) => a[1].name.localeCompare(b[1].name));
+  }
+  return provCodes.map(code => ({ code, name: PROVINCE_NAMES[code] || code, items: groups[code] }));
+}
+
+// Short marker for option text flagging a composed location (merged or
+// spliced from multiple stations), so it's visible in the dropdown itself
+// without having to select the station first. '' for an ordinary location.
+function stationCompositionTag(cfg) {
+  if (cfg.virtual && cfg.mergeSources) return ' (merged)';
+  const n = cfg.segments.length;
+  return n > 1 ? ` (${n} stations)` : '';
+}
+
+// Builds <optgroup>s (one per province) inside the given <select>.
+function buildProvinceOptions(selectEl, stations, activeKey) {
+  for (const { name, items } of groupStationsByProvince(stations)) {
+    const group = document.createElement('optgroup');
+    group.label = name;
+    for (const [key, cfg] of items) {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = cfg.name + stationCompositionTag(cfg);
+      if (key === activeKey) opt.selected = true;
+      group.appendChild(opt);
+    }
+    selectEl.appendChild(group);
+  }
+}
+
+// Populates a <select> with one option per registered location, grouped by
+// province/territory, and wires it to navigate to the same page with
+// ?station=<key> on change.
 function initStationNav(selectEl, stations, activeKey) {
   selectEl.textContent = '';
-  for (const [key, cfg] of Object.entries(stations)) {
-    const opt = document.createElement('option');
-    opt.value = key;
-    opt.textContent = cfg.name;
-    if (key === activeKey) opt.selected = true;
-    selectEl.appendChild(opt);
-  }
+  buildProvinceOptions(selectEl, stations, activeKey);
   selectEl.addEventListener('change', () => {
     const params = new URLSearchParams(location.search);
     params.set('station', selectEl.value);

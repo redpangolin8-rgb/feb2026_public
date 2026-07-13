@@ -178,7 +178,9 @@ async function loadAll(cfg) {
     }
   }
 
-  document.getElementById('status').textContent = `Loaded ${loaded} years of data.`;
+  const loadedYears = Object.keys(yearMonthly).map(Number);
+  const range = loadedYears.length ? ` (${Math.min(...loadedYears)}–${Math.max(...loadedYears)})` : '';
+  document.getElementById('status').textContent = `Loaded ${loaded} years of data${range}${stationCompositionNote(cfg)}.`;
   return { monthlyTotals, yearMonthly };
 }
 
