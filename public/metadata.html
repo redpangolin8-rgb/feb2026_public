@@ -119,9 +119,14 @@
     (≈2,990 days recovered registry-wide).</p>
     <p><strong>Gaps:</strong> the fetcher discards years for which ECCC returns only blank
     placeholder rows, so a missing year file means ECCC has no real data for that year. The
-    coverage and gap lists below are computed live against the actual data files, at year
-    granularity. Days flagged “M” (missing) inside otherwise-present years are handled by each
-    page's own completeness rules (e.g. annual-extremes charts require ≥300 valid days).</p>
+    coverage and gap lists below are computed live against the actual data files, but only at
+    <em>year</em> granularity — a year counts as covered as soon as its file exists, even if most
+    of its days are individually flagged “M” (missing) by ECCC. That blind spot is real: Mactaquac
+    has a file for every year since 1976, so nothing below flags it, but from 2006 onward only
+    28–85% of its days actually have data (see its notes). Each analysis page applies its own
+    day-level completeness rule on top of this (e.g. annual-extremes charts require ≥300 valid
+    days per year) — this page doesn't re-derive that automatically, so a station can look “fine”
+    here while several of its years are quietly excluded elsewhere.</p>
     <p><strong>A caution on the earliest records:</strong> 19th-century observers often
     under-recorded light winter snowfall, so cold-season statistics from a station's first
     decades deserve more skepticism than modern data. Notes below are curated by hand;
@@ -203,12 +208,24 @@ const NOTES = {
   ],
   mactaquac: [
     '30 km from Fredericton on the Saint John River; a distinct site, not part of the Fredericton splice.',
+    'Real, sustained data-quality problem: 1976–2005 is excellent (92–100% of days present), but 2006 onward has never recovered — day completeness runs 28–85%, mostly 40–70%, and 2007 has no file at all. Max temp, min temp, and precip are all missing at nearly identical rates each year, which rules out a single broken sensor (e.g. just the rain gauge) and points to the whole station going offline repeatedly — plausibly an unreliable automated telemetry/logging system, common for small unmanned park stations. Effectively only 1976–2005 is usable for this station\'s annual-extremes and drought charts; most years from 2006 on fail the ≥300-valid-day threshold those pages require.',
   ],
   quatsino: [
     'Longest single-station-ID active record in the registry: one unbroken ID since 1895.',
   ],
   comox: [
     'Single unbroken station ID since 1944.',
+  ],
+  vancouver_harbour: [
+    'Single unbroken station ID since 1925 (101 years) — the longest currently-active record found in the BC Lower Mainland survey, though still well short of Quatsino’s 1895 start.',
+    'ECCC has no data for this station in 1963–1964 — a genuine 2-year gap, otherwise the record is complete.',
+    'A new parallel station, “Vancouver Harbour” (55438, no “CS” suffix), sits 1.1 km away and has reported since 2023. Too short a record to act on yet, but worth watching as a possible eventual successor to 888.',
+  ],
+  white_rock: [
+    'Single unbroken station ID since 1929 (97 years).',
+    'A genuine 22-year gap: ECCC has no data for this station from 1971–1992, similar in scale to Lister’s 24-year gap. The pre-1971 and post-1992 halves are otherwise essentially complete.',
+    'Not to be confused with an unrelated station also named plain “White Rock” (6507) — that one is in Nova Scotia, nowhere near this BC location. A reminder that name matches always need a coordinate check before being trusted.',
+    '“White Rock STP” (928, 1964–2002) sits at effectively the same coordinates but wasn’t needed for a splice: this station (925) already covers that whole span on its own.',
   ],
 };
 

@@ -192,5 +192,29 @@
     "segments": [
       { "id": 155 }
     ]
+  },
+  "vancouver_harbour": {
+    "name": "Vancouver Harbour CS",
+    "province": "BC",
+    "startYear": 1925,
+    "segments": [
+      { "id": 888 }
+    ]
+  },
+  "white_rock": {
+    "name": "White Rock Campbell Scientific",
+    "province": "BC",
+    "startYear": 1929,
+    "segments": [
+      { "id": 925 }
+    ]
+  },
+  "n_vancouver_wharves": {
+    "name": "N Vancouver Wharves",
+    "province": "BC",
+    "startYear": 1962,
+    "segments": [
+      { "id": 833 }
+    ]
   }
 }
