@@ -153,6 +153,30 @@
   </div>
 
   <div class="chart-card">
+    <h2>Hottest and coldest months on record</h2>
+    <p class="chart-note">
+      Ranked by mean temperature (the average of each day's own mean, over the whole month) —
+      the standard measure of how hot or cold a month was overall, since a single scorching
+      afternoon or cold snap doesn't necessarily make the month itself remarkable. Daily max/min
+      extremes are covered separately above; this is about the month as a whole.
+    </p>
+    <div class="rank-wrap">
+      <div class="rank-col"><h3>Hottest months</h3><div class="rank-scroll"><table class="rank" id="topHotMonths"></table></div></div>
+      <div class="rank-col"><h3>Coldest months</h3><div class="rank-scroll"><table class="rank" id="topColdMonths"></table></div></div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <h2>Each of the last 12 months' mean temperature, ranked against the same month in all years</h2>
+    <div class="rank-scroll"><table class="rank" id="monthlyMeanRankTable"></table></div>
+    <p class="footnote">
+      Mean temperature per month, ranked against the same calendar month across the whole record
+      (Julys against Julys). Months need at least 25 days of valid data; the current in-progress
+      month shows as “—”. Highlighted rows rank in that month's all-time top 10.
+    </p>
+  </div>
+
+  <div class="chart-card">
     <h2 id="amaxTitle">Hottest and coldest stretch of each year</h2>
     <canvas id="amaxChart" height="260"></canvas>
   </div>
@@ -229,9 +253,10 @@ DAY_KEYS.forEach((k, i) => DAY_INDEX[k] = i);
 function parseCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   const header = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
-  const dateIdx = header.findIndex(h => /date\/time|date$/i.test(h));
-  const maxIdx  = header.findIndex(h => /max temp/i.test(h));
-  const minIdx  = header.findIndex(h => /min temp/i.test(h));
+  const dateIdx  = header.findIndex(h => /date\/time|date$/i.test(h));
+  const maxIdx   = header.findIndex(h => /max temp/i.test(h));
+  const minIdx   = header.findIndex(h => /min temp/i.test(h));
+  const meanIdx  = header.findIndex(h => /mean temp/i.test(h));
   if (dateIdx === -1 || maxIdx === -1 || minIdx === -1) return [];
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
@@ -239,9 +264,15 @@ function parseCSV(text) {
     if (cols.length < header.length) continue;
     const date = cols[dateIdx];
     if (!date) continue;
-    const max = parseFloat(cols[maxIdx]);
-    const min = parseFloat(cols[minIdx]);
-    rows.push({ date, max: isFinite(max) ? max : null, min: isFinite(min) ? min : null });
+    const max  = parseFloat(cols[maxIdx]);
+    const min  = parseFloat(cols[minIdx]);
+    const mean = meanIdx !== -1 ? parseFloat(cols[meanIdx]) : NaN;
+    rows.push({
+      date,
+      max:  isFinite(max) ? max : null,
+      min:  isFinite(min) ? min : null,
+      mean: isFinite(mean) ? mean : (isFinite(max) && isFinite(min) ? (max + min) / 2 : null),
+    });
   }
   return rows;
 }
@@ -261,7 +292,7 @@ async function loadAll(cfg) {
     for (const row of parseCSV(text)) {
       days.push({
         d: row.date, t: Date.parse(row.date + 'T00:00:00Z') / 86400000,
-        max: row.max, min: row.min,
+        max: row.max, min: row.min, mean: row.mean,
       });
     }
   }
@@ -608,8 +639,11 @@ function render(computed, days) {
   spellAmaxChart = yearBarChart('spellAmaxChart', spellYearLabels, hotSpellVals, coldSpellVals,
     'Longest heat wave', 'Longest cold snap', '192,83,62', '47,111,143', 'days');
 
-  // ── Monthly ranking table ──────────────────────────────────────────────────
+  // ── Monthly ranking tables ─────────────────────────────────────────────────
   fillMonthlyRank(days);
+  const monthlyMeans = buildMonthlyMeans(days);
+  fillTopMonths(monthlyMeans);
+  fillMonthlyMeanRank(days, monthlyMeans);
 
   // ── Headline ──────────────────────────────────────────────────────────────
   const headlineEl = document.getElementById('headline');
@@ -699,6 +733,97 @@ function fillMonthlyRank(days) {
       ? [r.label, r.m.hotVal.toFixed(1), r.m.hotDate, `#${r.hotRank} of ${r.n}`,
          r.m.coldVal.toFixed(1), r.m.coldDate, `#${r.coldRank} of ${r.n}`]
       : [r.label, '—', '—', '—', '—', '—', '—'];
+    fillRow(row, cells, false, { 0: 'col-label' });
+  }
+}
+
+// Aggregates daily mean temp into calendar months, requiring >=25 valid days
+// (same threshold trends.html uses) for a month to be considered ranked.
+const MONTHLY_MEAN_MIN_DAYS = 25;
+function buildMonthlyMeans(days) {
+  const acc = {};  // 'YYYY-MM' -> { sum, n }
+  for (const day of days) {
+    if (day.mean === null) continue;
+    const key = day.d.slice(0, 7);
+    if (!acc[key]) acc[key] = { sum: 0, n: 0 };
+    acc[key].sum += day.mean;
+    acc[key].n++;
+  }
+  const out = {};
+  for (const [key, { sum, n }] of Object.entries(acc)) {
+    if (n >= MONTHLY_MEAN_MIN_DAYS) out[key] = { mean: sum / n, n };
+  }
+  return out;
+}
+
+// All-time top 10 hottest/coldest calendar months (absolute ranking, pooling
+// every month together — naturally dominated by summer/winter, same as the
+// page's daily top-10 tables).
+function fillTopMonths(monthlyMeans) {
+  const entries = Object.entries(monthlyMeans).map(([key, v]) => {
+    const y = parseInt(key.slice(0, 4)), m = parseInt(key.slice(5, 7)) - 1;
+    return { label: `${MONTH_NAMES[m]} ${y}`, mean: v.mean, year: y };
+  });
+  const hottest = [...entries].sort((a, b) => b.mean - a.mean);
+  const coldest = [...entries].sort((a, b) => a.mean - b.mean);
+  const recentCutoff = new Date().getFullYear() - 4;
+
+  fillMonthTable(document.getElementById('topHotMonths'), hottest, recentCutoff);
+  fillMonthTable(document.getElementById('topColdMonths'), coldest, recentCutoff);
+}
+
+function fillMonthTable(tableEl, ordered, recentCutoff) {
+  tableEl.textContent = '';
+  const thead = tableEl.createTHead();
+  fillRow(thead.insertRow(), ['#', 'Month', 'Mean (°C)'], true, { 1: 'col-label' });
+  const tbody = tableEl.createTBody();
+  for (let i = 0; i < Math.min(10, ordered.length); i++) {
+    const e = ordered[i];
+    const row = tbody.insertRow();
+    if (e.year >= recentCutoff) row.className = 'recent';
+    fillRow(row, [String(i + 1), e.label, e.mean.toFixed(1)], false, { 1: 'col-label' });
+  }
+}
+
+// Each of the last 12 calendar months' mean temp, ranked against the same
+// calendar month across the whole record (Julys against Julys).
+function fillMonthlyMeanRank(days, monthlyMeans) {
+  const cohorts = Array.from({length: 12}, () => []);
+  for (const [key, v] of Object.entries(monthlyMeans)) {
+    cohorts[parseInt(key.slice(5, 7)) - 1].push(v.mean);
+  }
+
+  const tableEl = document.getElementById('monthlyMeanRankTable');
+  tableEl.textContent = '';
+  const thead = tableEl.createTHead();
+  fillRow(thead.insertRow(), ['Month', 'Mean (°C)', 'Rank (same month, all years)'], true, { 0: 'col-label' });
+
+  const rows = [];
+  if (days.length) {
+    let y = parseInt(days[days.length - 1].d.slice(0, 4));
+    let mo = parseInt(days[days.length - 1].d.slice(5, 7));
+    for (let i = 0; i < 12; i++) {
+      const key = `${y}-${String(mo).padStart(2, '0')}`;
+      const v = monthlyMeans[key];
+      const cohort = cohorts[mo - 1];
+      if (v && cohort.length) {
+        const rank = cohort.filter(m => m > v.mean).length + 1;
+        rows.push({ label: `${MONTH_NAMES[mo - 1]} ${y}`, v, rank, n: cohort.length });
+      } else {
+        rows.push({ label: `${MONTH_NAMES[mo - 1]} ${y}`, v: null });
+      }
+      mo--; if (mo === 0) { mo = 12; y--; }
+    }
+    rows.reverse();
+  }
+
+  const tbody = tableEl.createTBody();
+  for (const r of rows) {
+    const row = tbody.insertRow();
+    if (r.v && r.rank <= 10) row.className = 'notable';
+    const cells = r.v
+      ? [r.label, r.v.mean.toFixed(1), `#${r.rank} of ${r.n}`]
+      : [r.label, '—', '—'];
     fillRow(row, cells, false, { 0: 'col-label' });
   }
 }
