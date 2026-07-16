@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Extreme Temperatures</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="js/stations.js"></script>
+<style>
+  :root {
+    --ink: #1a2330;
+    --paper: #f6f4ee;
+    --line: #d8d2c4;
+    --accent: #e8a23c;
+    --hot: #c0533e;
+    --cold: #2f6f8f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  header { padding: 28px 24px 18px; border-bottom: 2px solid var(--ink); }
+  header h1 { margin: 0; font-size: 1.8rem; letter-spacing: 0.02em; }
+  header p { margin: 6px 0 0; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem; color: #555; }
+  header nav { margin-top: 10px; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem; }
+  header nav a { color: var(--ink); margin-right: 16px; }
+  .station-tag {
+    display: inline-block; margin-top: 10px;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    border: 1px solid var(--ink); padding: 3px 10px; border-radius: 2px;
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px; }
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: end;
+    background: #fff; border: 1px solid var(--line); padding: 16px;
+    border-radius: 4px; margin-bottom: 20px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: #666; }
+  .field select {
+    font-family: inherit; padding: 6px 8px; border: 1px solid var(--line);
+    border-radius: 3px; font-size: 0.9rem; min-width: 140px;
+  }
+  .status {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem;
+    color: #777; margin: 4px 0 18px; min-height: 1.2em;
+  }
+  .headline {
+    background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--accent);
+    border-radius: 4px; padding: 16px 18px; margin-bottom: 20px;
+    font-size: 1.02rem; line-height: 1.55; min-height: 1.5em;
+  }
+  .chart-card {
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 4px; padding: 16px; margin-bottom: 20px;
+  }
+  .chart-card h2 {
+    font-size: 1rem; margin: 0 0 12px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.08em; color: #555;
+  }
+  .chart-note {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.82rem;
+    color: #666; margin: -4px 0 12px;
+  }
+  .rank-wrap { display: flex; flex-wrap: wrap; gap: 24px; }
+  .rank-col { flex: 1 1 260px; min-width: 0; max-width: 100%; }
+  .rank-col h3 {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem;
+    text-transform: uppercase; letter-spacing: 0.07em; color: #555; margin: 0 0 8px;
+  }
+  .rank-scroll { overflow-x: auto; }
+  table.rank {
+    width: 100%; border-collapse: collapse;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.8rem;
+  }
+  table.rank th, table.rank td {
+    padding: 5px 6px; text-align: right; border-bottom: 1px solid var(--line);
+    overflow-wrap: break-word;
+  }
+  table.rank th.col-date, table.rank td.col-date,
+  table.rank th.col-label, table.rank td.col-label { text-align: left; }
+  table.rank th { color: #555; font-weight: 600; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.04em; }
+  tr.recent td { font-weight: 700; }
+  tr.recent td.col-date::after {
+    content: 'recent'; display: block; margin-top: 2px;
+    font-weight: 600; font-size: 0.62rem; color: #fff;
+    background: var(--accent); border-radius: 8px; padding: 1px 6px;
+    text-transform: uppercase; letter-spacing: 0.04em; width: fit-content;
+  }
+  table.rank tr.notable td { background: rgba(232,162,60,0.14); }
+  .footnote {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
+    color: #999; margin-top: 14px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Extreme Temperatures</h1>
+  <p>Record highs/lows, heat waves, and cold snaps — each defined relative to this station's own climatology, and how the present compares · <span id="startYear"></span>–<span id="endYear"></span></p>
+  <span class="station-tag" id="stationTag">Loading…</span>
+  <select id="locationSelect" style="margin-left:10px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:0.78rem;padding:3px 8px;border:1px solid var(--ink);border-radius:2px;"></select>
+  <nav>
+    <a href="index.html">← Home</a>
+    <a href="weather.html">Weather History</a>
+    <a href="stats.html">Climate Statistics</a>
+    <a href="precip.html">Precipitation</a>
+    <a href="anomalies.html">Anomalies</a>
+    <a href="compare.html">Compare Stations</a>
+    <a href="trends.html">Trends</a>
+    <a href="extremes.html">Extreme Precip</a>
+    <a href="droughts.html">Dry Spells</a>
+  </nav>
+</header>
+
+<main>
+  <div class="controls">
+    <div class="field">
+      <label for="durationSelect">Stretch window</label>
+      <select id="durationSelect">
+        <option value="1">1-day</option>
+        <option value="2">2-day</option>
+        <option value="3">3-day</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="status" id="status">Loading data…</div>
+
+  <div class="headline" id="headline"></div>
+
+  <div class="chart-card">
+    <h2>Past 12 months · daily temperature and running heat-wave / cold-snap length</h2>
+    <p class="chart-note" id="recentContext"></p>
+    <canvas id="recentChart" height="280"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Each of the last 12 months, ranked against the same month in all years</h2>
+    <div class="rank-scroll"><table class="rank" id="monthlyRankTable"></table></div>
+    <p class="footnote">
+      Each month's hottest and coldest day are ranked against the same calendar month across the
+      whole record (Julys against Julys), so seasonality doesn't skew the comparison. Months need
+      at least 25 days of valid data to be ranked; the current in-progress month shows as “—”.
+      Highlighted rows rank in that month's all-time top 10 on either measure.
+    </p>
+  </div>
+
+  <div class="chart-card">
+    <h2 id="amaxTitle">Hottest and coldest stretch of each year</h2>
+    <canvas id="amaxChart" height="260"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Longest heat wave / cold snap of each year</h2>
+    <canvas id="spellAmaxChart" height="260"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2 id="topEventsTitle">All-time top 10 stretches</h2>
+    <div class="rank-wrap">
+      <div class="rank-col"><h3>Hottest</h3><div class="rank-scroll"><table class="rank" id="topHot"></table></div></div>
+      <div class="rank-col"><h3>Coldest</h3><div class="rank-scroll"><table class="rank" id="topCold"></table></div></div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <h2>All-time top 10 heat waves / cold snaps</h2>
+    <div class="rank-wrap">
+      <div class="rank-col"><h3>Longest heat waves</h3><div class="rank-scroll"><table class="rank" id="topHeatSpell"></table></div></div>
+      <div class="rank-col"><h3>Longest cold snaps</h3><div class="rank-scroll"><table class="rank" id="topColdSpell"></table></div></div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <h2 id="recentTopTitle">Top 10 · last 25 years</h2>
+    <div class="rank-wrap">
+      <div class="rank-col"><h3>Hottest stretches</h3><div class="rank-scroll"><table class="rank" id="recentHot"></table></div></div>
+      <div class="rank-col"><h3>Coldest stretches</h3><div class="rank-scroll"><table class="rank" id="recentCold"></table></div></div>
+    </div>
+    <div class="rank-wrap" style="margin-top:20px;">
+      <div class="rank-col"><h3>Longest heat waves</h3><div class="rank-scroll"><table class="rank" id="recentHeatSpell"></table></div></div>
+      <div class="rank-col"><h3>Longest cold snaps</h3><div class="rank-scroll"><table class="rank" id="recentColdSpell"></table></div></div>
+    </div>
+    <p class="footnote">
+      A "hot day" has a max temp above this station's own climatological mean+1σ for that
+      calendar day (±7-day window, pooled across the whole record); a "cold day" has a min temp
+      below mean−1σ. Heat waves and cold snaps are runs of consecutive hot/cold days — a missing
+      or invalid day always ends a run, so record gaps can shorten a streak but never fabricate
+      one. "Hottest/coldest stretch" events use the raw max/min temp average over the selected
+      window and are non-overlapping, like the extreme-precipitation page. Annual charts include
+      only years with at least 300 days of valid data for the relevant variable; spells are
+      credited to the year they end in.
+    </p>
+  </div>
+</main>
+
+<script>
+let recentChart = null, amaxChart = null, spellAmaxChart = null;
+
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_DAYS  = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const WINDOW = 7;         // climatology smoothing window, days
+const DURATIONS = [1, 2, 3];
+const AMAX_MIN_DAYS = 300;
+
+function buildDayKeys() {
+  const keys = [];
+  for (let m = 0; m < 12; m++) {
+    for (let d = 1; d <= MONTH_DAYS[m]; d++)
+      keys.push(`${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
+    if (m === 1) keys.push('02-29');  // leap day — this page classifies every
+                                        // individual day, so it needs its own
+                                        // (thinly-sampled, ~1-in-4-years) bucket
+                                        // rather than being silently dropped.
+  }
+  return keys;
+}
+const DAY_KEYS = buildDayKeys();
+const DAY_INDEX = {};
+DAY_KEYS.forEach((k, i) => DAY_INDEX[k] = i);
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const header = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+  const dateIdx = header.findIndex(h => /date\/time|date$/i.test(h));
+  const maxIdx  = header.findIndex(h => /max temp/i.test(h));
+  const minIdx  = header.findIndex(h => /min temp/i.test(h));
+  if (dateIdx === -1 || maxIdx === -1 || minIdx === -1) return [];
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.replace(/"/g,'').trim());
+    if (cols.length < header.length) continue;
+    const date = cols[dateIdx];
+    if (!date) continue;
+    const max = parseFloat(cols[maxIdx]);
+    const min = parseFloat(cols[minIdx]);
+    rows.push({ date, max: isFinite(max) ? max : null, min: isFinite(min) ? min : null });
+  }
+  return rows;
+}
+
+async function loadAll(cfg) {
+  const endYear = new Date().getFullYear();
+  const years = Array.from({length: endYear - cfg.startYear + 1}, (_, i) => cfg.startYear + i);
+  document.getElementById('status').textContent = `Loading ${years.length} data files…`;
+  const texts = await Promise.all(years.map(year =>
+    fetch(weatherDataURL(cfg, year)).then(r => r.ok ? r.text() : null).catch(() => null)
+  ));
+  const days = [];
+  let loaded = 0;
+  for (const text of texts) {
+    if (!text) continue;
+    loaded++;
+    for (const row of parseCSV(text)) {
+      days.push({
+        d: row.date, t: Date.parse(row.date + 'T00:00:00Z') / 86400000,
+        max: row.max, min: row.min,
+      });
+    }
+  }
+  days.sort((a, b) => a.t - b.t);
+  // ECCC's current-year file contains date rows for months that haven't happened
+  // yet (all values blank). Trim trailing no-data days so "the last observation"
+  // and "the past 12 months" anchor to real data.
+  let end = days.length - 1;
+  while (end >= 0 && days[end].max === null && days[end].min === null) end--;
+  days.length = end + 1;
+  const range = days.length ? ` (${days[0].d.slice(0,4)}–${days[days.length-1].d.slice(0,4)})` : '';
+  document.getElementById('status').textContent =
+    `Loaded ${loaded} years of data${range}${stationCompositionNote(cfg)}.`;
+  return days;
+}
+
+function stats(values) {
+  if (!values || values.length < 2) return { mean: null, std: null };
+  const n = values.length;
+  const mean = values.reduce((a, b) => a + b, 0) / n;
+  const std  = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1));
+  return { mean, std };
+}
+
+// Climatological mean/std per calendar day, ±7-day window, pooled across every
+// year in the record — the same method stats.html uses for its mean±σ bands.
+function windowedStats(days, variable) {
+  const byMMDD = {};
+  for (const day of days) {
+    const v = day[variable];
+    if (v === null) continue;
+    const key = day.d.slice(5);
+    if (!byMMDD[key]) byMMDD[key] = [];
+    byMMDD[key].push(v);
+  }
+  const n = DAY_KEYS.length;
+  return Array.from({length: n}, (_, i) => {
+    const vals = [];
+    for (let o = -WINDOW; o <= WINDOW; o++) {
+      const idx = ((i + o) % n + n) % n;
+      vals.push(...(byMMDD[DAY_KEYS[idx]] ?? []));
+    }
+    return stats(vals);
+  });
+}
+
+// Tags each day as hot (max > mean+1sigma for that calendar day) and/or cold
+// (min < mean-1sigma), using the precomputed per-day-of-year climatology.
+function classifyDays(days, maxStats, minStats) {
+  return days.map(day => {
+    const idx = DAY_INDEX[day.d.slice(5)];
+    const { mean: maxMean, std: maxStd } = maxStats[idx];
+    const { mean: minMean, std: minStd } = minStats[idx];
+    const hot = day.max !== null && maxMean !== null && maxStd !== null && day.max > maxMean + maxStd;
+    const cold = day.min !== null && minMean !== null && minStd !== null && day.min < minMean - minStd;
+    return { ...day, hot, cold };
+  });
+}
+
+// Maximal runs of consecutive days where isMember(day) is true. A missing
+// value, a false classification, or a date gap all end a run.
+function buildRuns(days, isMember) {
+  const runs = [];
+  let runStart = -1, prevT = null;
+  function close(endIdx, ongoing) {
+    if (runStart === -1) return;
+    runs.push({
+      len: endIdx - runStart + 1,
+      startDate: days[runStart].d, endDate: days[endIdx].d,
+      tStart: days[runStart].t, tEnd: days[endIdx].t,
+      year: parseInt(days[endIdx].d.slice(0, 4)), ongoing: !!ongoing,
+    });
+    runStart = -1;
+  }
+  for (let i = 0; i < days.length; i++) {
+    const day = days[i];
+    if (prevT !== null && day.t !== prevT + 1) close(i - 1, false);
+    if (isMember(day)) { if (runStart === -1) runStart = i; }
+    else close(i - 1, false);
+    prevT = day.t;
+  }
+  close(days.length - 1, true);
+  return runs;
+}
+
+// Every valid N-day rolling average (consecutive dates, all values present).
+function buildAvgWindows(days, N, variable) {
+  const out = [];
+  for (let i = N - 1; i < days.length; i++) {
+    if (days[i].t - days[i - N + 1].t !== N - 1) continue;
+    let sum = 0, ok = true;
+    for (let j = i - N + 1; j <= i; j++) {
+      const v = days[j][variable];
+      if (v === null) { ok = false; break; }
+      sum += v;
+    }
+    if (!ok) continue;
+    out.push({
+      tEnd: days[i].t, avg: +(sum / N).toFixed(1),
+      startDate: days[i - N + 1].d, endDate: days[i].d,
+      year: parseInt(days[i].d.slice(0, 4)),
+    });
+  }
+  return out;
+}
+
+// Non-overlapping extreme windows: hottest-first for 'hot', coldest-first for 'cold'.
+function dedupeExtreme(windows, N, direction) {
+  const sorted = [...windows].sort((a, b) => direction === 'hot' ? b.avg - a.avg : a.avg - b.avg);
+  const used = new Set();
+  const events = [];
+  for (const w of sorted) {
+    let clash = false;
+    for (let t = w.tEnd - N + 1; t <= w.tEnd; t++) { if (used.has(t)) { clash = true; break; } }
+    if (clash) continue;
+    for (let t = w.tEnd - N + 1; t <= w.tEnd; t++) used.add(t);
+    events.push(w);
+  }
+  return events;
+}
+
+function validDaysByYear(days, variable) {
+  const counts = {};
+  for (const day of days) {
+    if (day[variable] === null) continue;
+    const y = parseInt(day.d.slice(0, 4));
+    counts[y] = (counts[y] || 0) + 1;
+  }
+  return counts;
+}
+
+function fmtRange(startDate, endDate) {
+  return startDate === endDate ? endDate : `${startDate} → ${endDate}`;
+}
+
+function fillRow(rowEl, texts, isHeader, classByIndex) {
+  texts.forEach((text, i) => {
+    const cell = isHeader ? document.createElement('th') : rowEl.insertCell();
+    cell.textContent = text;
+    if (classByIndex && classByIndex[i]) cell.className = classByIndex[i];
+    if (isHeader) rowEl.appendChild(cell);
+  });
+}
+
+function fillTable(tableEl, rows, valueHeader, recentCutoff) {
+  tableEl.textContent = '';
+  const thead = tableEl.createTHead();
+  fillRow(thead.insertRow(), ['#', 'Date(s)', valueHeader], true, { 1: 'col-date' });
+  const tbody = tableEl.createTBody();
+  for (let i = 0; i < Math.min(10, rows.length); i++) {
+    const { dates, value, year } = rows[i];
+    const row = tbody.insertRow();
+    if (year >= recentCutoff) row.className = 'recent';
+    fillRow(row, [String(i + 1), dates, value], false, { 1: 'col-date' });
+  }
+}
+
+function fillRecentTable(tableEl, ordered, cutoff25, badgeCutoff, valueHeader, rowOf, rankOf) {
+  tableEl.textContent = '';
+  const thead = tableEl.createTHead();
+  fillRow(thead.insertRow(), ['#', 'Date(s)', valueHeader, 'All-time #'], true, { 1: 'col-date' });
+  const tbody = tableEl.createTBody();
+  const recent = ordered.filter(item => item.year >= cutoff25).slice(0, 10);
+  for (let i = 0; i < recent.length; i++) {
+    const item = recent[i];
+    const { dates, value } = rowOf(item);
+    const row = tbody.insertRow();
+    if (item.year >= badgeCutoff) row.className = 'recent';
+    fillRow(row, [String(i + 1), dates, value, '#' + rankOf(item)], false, { 1: 'col-date' });
+  }
+}
+
+function amaxRolling(vals) {
+  return vals.map((_, i) => {
+    const window = vals.slice(Math.max(0, i - 5), i + 6).filter(v => v !== null);
+    return window.length >= 6 ? +(window.reduce((a, b) => a + b, 0) / window.length).toFixed(1) : null;
+  });
+}
+
+function yearBarChart(canvasId, yearLabels, seriesA, seriesB, labelA, labelB, colorA, colorB, yLabel) {
+  return new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: {
+      labels: yearLabels,
+      datasets: [
+        { label: labelA, data: seriesA, backgroundColor: `rgba(${colorA},0.7)`, order: 2 },
+        { label: labelB, data: seriesB, backgroundColor: `rgba(${colorB},0.7)`, order: 2 },
+        { label: `${labelA} 11-yr avg`, data: amaxRolling(seriesA), type: 'line', borderColor: `rgba(${colorA},0.9)`, backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.3, spanGaps: true, order: 1 },
+        { label: `${labelB} 11-yr avg`, data: amaxRolling(seriesB), type: 'line', borderColor: `rgba(${colorB},0.9)`, backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.3, spanGaps: true, order: 1 },
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 20 } },
+        y: { title: { display: true, text: yLabel } },
+      }
+    }
+  });
+}
+
+function renderWindowParts(computed, N) {
+  const { hotEvents, coldEvents } = computed.windows[N];
+  const recentCutoff = new Date().getFullYear() - 4;
+  const cutoff25 = new Date().getFullYear() - 24;
+  const noun = N === 1 ? '1-day' : `${N}-day`;
+
+  document.getElementById('topEventsTitle').textContent = `All-time top 10 ${noun} stretches`;
+  fillTable(document.getElementById('topHot'),
+    hotEvents.slice(0, 10).map(w => ({ dates: fmtRange(w.startDate, w.endDate), value: w.avg.toFixed(1) + ' °C', year: w.year })),
+    'Avg (°C)', recentCutoff);
+  fillTable(document.getElementById('topCold'),
+    coldEvents.slice(0, 10).map(w => ({ dates: fmtRange(w.startDate, w.endDate), value: w.avg.toFixed(1) + ' °C', year: w.year })),
+    'Avg (°C)', recentCutoff);
+
+  document.getElementById('recentTopTitle').textContent =
+    `Top 10 · last 25 years (${cutoff25}–${new Date().getFullYear()})`;
+  fillRecentTable(document.getElementById('recentHot'), hotEvents, cutoff25, recentCutoff,
+    'Avg (°C)', w => ({ dates: fmtRange(w.startDate, w.endDate), value: w.avg.toFixed(1) }),
+    w => hotEvents.filter(e => e.avg > w.avg).length + 1);
+  fillRecentTable(document.getElementById('recentCold'), coldEvents, cutoff25, recentCutoff,
+    'Avg (°C)', w => ({ dates: fmtRange(w.startDate, w.endDate), value: w.avg.toFixed(1) }),
+    w => coldEvents.filter(e => e.avg < w.avg).length + 1);
+
+  // Hottest/coldest N-day stretch of each year
+  const validMax = computed.validMax, validMin = computed.validMin;
+  const hotAmax = {}, coldAmax = {};
+  for (const w of computed.windows[N].hotWindows) {
+    if ((validMax[w.year] || 0) < AMAX_MIN_DAYS) continue;
+    if (!(w.year in hotAmax) || w.avg > hotAmax[w.year]) hotAmax[w.year] = w.avg;
+  }
+  for (const w of computed.windows[N].coldWindows) {
+    if ((validMin[w.year] || 0) < AMAX_MIN_DAYS) continue;
+    if (!(w.year in coldAmax) || w.avg < coldAmax[w.year]) coldAmax[w.year] = w.avg;
+  }
+  const years = [...new Set([...Object.keys(hotAmax), ...Object.keys(coldAmax)])].map(Number);
+  const yearLabels = years.length
+    ? Array.from({length: Math.max(...years) - Math.min(...years) + 1}, (_, i) => Math.min(...years) + i)
+    : [];
+  const hotVals = yearLabels.map(y => hotAmax[y] !== undefined ? hotAmax[y] : null);
+  const coldVals = yearLabels.map(y => coldAmax[y] !== undefined ? coldAmax[y] : null);
+
+  document.getElementById('amaxTitle').textContent = `Hottest and coldest ${noun} stretch of each year (°C)`;
+  if (amaxChart) amaxChart.destroy();
+  amaxChart = yearBarChart('amaxChart', yearLabels, hotVals, coldVals, 'Hottest', 'Coldest',
+    '192,83,62', '47,111,143', '°C');
+}
+
+function render(computed, days) {
+  const { hotRuns, coldRuns } = computed;
+  const hotByLen = [...hotRuns].sort((a, b) => b.len - a.len);
+  const coldByLen = [...coldRuns].sort((a, b) => b.len - a.len);
+  const recentCutoff = new Date().getFullYear() - 4;
+  const cutoff25 = new Date().getFullYear() - 24;
+
+  fillTable(document.getElementById('topHeatSpell'),
+    hotByLen.slice(0, 10).map(r => ({
+      dates: fmtRange(r.startDate, r.endDate) + (r.ongoing ? ' (ongoing)' : ''), value: String(r.len), year: r.year,
+    })), 'Days', recentCutoff);
+  fillTable(document.getElementById('topColdSpell'),
+    coldByLen.slice(0, 10).map(r => ({
+      dates: fmtRange(r.startDate, r.endDate) + (r.ongoing ? ' (ongoing)' : ''), value: String(r.len), year: r.year,
+    })), 'Days', recentCutoff);
+
+  fillRecentTable(document.getElementById('recentHeatSpell'), hotByLen, cutoff25, recentCutoff,
+    'Days',
+    r => ({ dates: fmtRange(r.startDate, r.endDate) + (r.ongoing ? ' (ongoing)' : ''), value: String(r.len) }),
+    r => hotByLen.filter(e => e.len > r.len).length + 1);
+  fillRecentTable(document.getElementById('recentColdSpell'), coldByLen, cutoff25, recentCutoff,
+    'Days',
+    r => ({ dates: fmtRange(r.startDate, r.endDate) + (r.ongoing ? ' (ongoing)' : ''), value: String(r.len) }),
+    r => coldByLen.filter(e => e.len > r.len).length + 1);
+
+  // ── Past 12 months: daily max/min + running hot/cold streak counter ──────
+  const lastT = days.length ? days[days.length - 1].t : 0;
+  const recentDays = days.filter(day => day.t > lastT - 365);
+  const labels = recentDays.map(day => day.d);
+  const maxSeries = recentDays.map(day => day.max);
+  const minSeries = recentDays.map(day => day.min);
+
+  const streak = [];
+  let count = 0, prevT = null;
+  for (const day of recentDays) {
+    if (prevT !== null && day.t !== prevT + 1) count = 0;
+    if (day.hot) count = count > 0 ? count + 1 : 1;
+    else if (day.cold) count = count < 0 ? count - 1 : -1;
+    else count = 0;
+    streak.push(day.max === null && day.min === null ? null : count);
+    prevT = day.t;
+  }
+
+  const hotRecord = hotByLen[0] ?? null;
+  const coldRecord = coldByLen[0] ?? null;
+  document.getElementById('recentContext').textContent =
+    (hotRecord ? `All-time longest heat wave: ${hotRecord.len} days (${fmtRange(hotRecord.startDate, hotRecord.endDate)}). ` : '') +
+    (coldRecord ? `All-time longest cold snap: ${coldRecord.len} days (${fmtRange(coldRecord.startDate, coldRecord.endDate)}).` : '');
+
+  if (recentChart) recentChart.destroy();
+  recentChart = new Chart(document.getElementById('recentChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Max temp (°C)', data: maxSeries, borderColor: 'rgba(192,83,62,0.9)', backgroundColor: 'transparent', borderWidth: 1.3, pointRadius: 0, tension: 0.15, spanGaps: false, yAxisID: 'y', order: 2 },
+        { label: 'Min temp (°C)', data: minSeries, borderColor: 'rgba(47,111,143,0.9)', backgroundColor: 'transparent', borderWidth: 1.3, pointRadius: 0, tension: 0.15, spanGaps: false, yAxisID: 'y', order: 2 },
+        { label: 'Heat wave / cold snap streak (days)', data: streak, type: 'bar', backgroundColor: streak.map(v => v === null ? 'transparent' : v >= 0 ? 'rgba(192,83,62,0.35)' : 'rgba(47,111,143,0.35)'), yAxisID: 'y2', order: 3 },
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ticks: { maxRotation: 0, autoSkip: false,
+          callback: (_, i) => labels[i]?.endsWith('-01') ? `${MONTH_NAMES[parseInt(labels[i].slice(5,7)) - 1]} ${labels[i].slice(0,4)}` : '' } },
+        y:  { position: 'left',  title: { display: true, text: '°C' } },
+        y2: { position: 'right', title: { display: true, text: 'streak (days, + hot / − cold)' }, grid: { drawOnChartArea: false } },
+      }
+    }
+  });
+
+  // ── Longest heat wave / cold snap of each year ────────────────────────────
+  const validByYearMax = validDaysByYear(days, 'max');
+  const validByYearMin = validDaysByYear(days, 'min');
+  const hotSpellByYear = {}, coldSpellByYear = {};
+  for (const r of hotRuns) {
+    if ((validByYearMax[r.year] || 0) < AMAX_MIN_DAYS) continue;
+    if (!(r.year in hotSpellByYear) || r.len > hotSpellByYear[r.year]) hotSpellByYear[r.year] = r.len;
+  }
+  for (const r of coldRuns) {
+    if ((validByYearMin[r.year] || 0) < AMAX_MIN_DAYS) continue;
+    if (!(r.year in coldSpellByYear) || r.len > coldSpellByYear[r.year]) coldSpellByYear[r.year] = r.len;
+  }
+  const spellYears = [...new Set([...Object.keys(hotSpellByYear), ...Object.keys(coldSpellByYear)])].map(Number);
+  const spellYearLabels = spellYears.length
+    ? Array.from({length: Math.max(...spellYears) - Math.min(...spellYears) + 1}, (_, i) => Math.min(...spellYears) + i)
+    : [];
+  const hotSpellVals = spellYearLabels.map(y => hotSpellByYear[y] !== undefined ? hotSpellByYear[y] : null);
+  const coldSpellVals = spellYearLabels.map(y => coldSpellByYear[y] !== undefined ? coldSpellByYear[y] : null);
+
+  if (spellAmaxChart) spellAmaxChart.destroy();
+  spellAmaxChart = yearBarChart('spellAmaxChart', spellYearLabels, hotSpellVals, coldSpellVals,
+    'Longest heat wave', 'Longest cold snap', '192,83,62', '47,111,143', 'days');
+
+  // ── Monthly ranking table ──────────────────────────────────────────────────
+  fillMonthlyRank(days);
+
+  // ── Headline ──────────────────────────────────────────────────────────────
+  const headlineEl = document.getElementById('headline');
+  if (!days.length) { headlineEl.textContent = 'No temperature data available.'; return; }
+  const lastDate = days[days.length - 1].d;
+  const ongoingHot = hotRuns.find(r => r.ongoing && r.endDate === lastDate);
+  const ongoingCold = coldRuns.find(r => r.ongoing && r.endDate === lastDate);
+  let text = '';
+  if (ongoingHot) {
+    const rank = hotRuns.filter(r => r.len > ongoingHot.len).length + 1;
+    text += `A heat wave is under way as of the last observation (${lastDate}): ${ongoingHot.len} day${ongoingHot.len === 1 ? '' : 's'} and counting (#${rank} all-time if it ended today). `;
+  } else if (ongoingCold) {
+    const rank = coldRuns.filter(r => r.len > ongoingCold.len).length + 1;
+    text += `A cold snap is under way as of the last observation (${lastDate}): ${ongoingCold.len} day${ongoingCold.len === 1 ? '' : 's'} and counting (#${rank} all-time if it ended today). `;
+  } else {
+    text += `As of the last observation (${lastDate}), neither a heat wave nor a cold snap is under way. `;
+  }
+  const recentHotRuns = hotRuns.filter(r => r.tEnd > lastT - 365);
+  const recentColdRuns = coldRuns.filter(r => r.tEnd > lastT - 365);
+  if (recentHotRuns.length) {
+    const longest = recentHotRuns.reduce((best, r) => r.len > best.len ? r : best);
+    const rank = hotRuns.filter(r => r.len > longest.len).length + 1;
+    text += `Longest heat wave of the past 12 months: ${longest.len} days (${fmtRange(longest.startDate, longest.endDate)}), #${rank} of ${hotRuns.length.toLocaleString()} on record. `;
+  }
+  if (recentColdRuns.length) {
+    const longest = recentColdRuns.reduce((best, r) => r.len > best.len ? r : best);
+    const rank = coldRuns.filter(r => r.len > longest.len).length + 1;
+    text += `Longest cold snap of the past 12 months: ${longest.len} days (${fmtRange(longest.startDate, longest.endDate)}), #${rank} of ${coldRuns.length.toLocaleString()} on record.`;
+  }
+  headlineEl.textContent = text;
+}
+
+// Each of the last 12 calendar months: hottest day and coldest day, each
+// ranked against the same calendar month across the whole record.
+function fillMonthlyRank(days) {
+  const MIN_VALID = 25;
+  const byMonth = {};  // 'YYYY-MM' -> {hot: {val,date,n}, cold: {val,date,n}}
+  for (const day of days) {
+    const key = day.d.slice(0, 7);
+    const m = byMonth[key] || (byMonth[key] = { hotVal: -Infinity, hotDate: null, coldVal: Infinity, coldDate: null, validMax: 0, validMin: 0 });
+    if (day.max !== null) {
+      m.validMax++;
+      if (day.max > m.hotVal) { m.hotVal = day.max; m.hotDate = day.d; }
+    }
+    if (day.min !== null) {
+      m.validMin++;
+      if (day.min < m.coldVal) { m.coldVal = day.min; m.coldDate = day.d; }
+    }
+  }
+  const cohorts = Array.from({length: 12}, () => []);
+  for (const [key, m] of Object.entries(byMonth)) {
+    if (m.validMax >= MIN_VALID && m.validMin >= MIN_VALID) {
+      cohorts[parseInt(key.slice(5, 7)) - 1].push({ hotVal: m.hotVal, coldVal: m.coldVal });
+    }
+  }
+
+  const tableEl = document.getElementById('monthlyRankTable');
+  tableEl.textContent = '';
+  const thead = tableEl.createTHead();
+  fillRow(thead.insertRow(), ['Month', 'Hottest day (°C)', 'Date', 'Rank', 'Coldest day (°C)', 'Date', 'Rank'], true, { 0: 'col-label' });
+
+  const rows = [];
+  if (days.length) {
+    let y = parseInt(days[days.length - 1].d.slice(0, 4));
+    let mo = parseInt(days[days.length - 1].d.slice(5, 7));
+    for (let i = 0; i < 12; i++) {
+      const key = `${y}-${String(mo).padStart(2, '0')}`;
+      const m = byMonth[key];
+      const cohort = cohorts[mo - 1];
+      if (m && m.validMax >= MIN_VALID && m.validMin >= MIN_VALID && cohort.length) {
+        const hotRank = cohort.filter(c => c.hotVal > m.hotVal).length + 1;
+        const coldRank = cohort.filter(c => c.coldVal < m.coldVal).length + 1;
+        rows.push({ label: `${MONTH_NAMES[mo - 1]} ${y}`, m, hotRank, coldRank, n: cohort.length });
+      } else {
+        rows.push({ label: `${MONTH_NAMES[mo - 1]} ${y}`, m: null });
+      }
+      mo--; if (mo === 0) { mo = 12; y--; }
+    }
+    rows.reverse();
+  }
+
+  const tbody = tableEl.createTBody();
+  for (const r of rows) {
+    const row = tbody.insertRow();
+    if (r.m && (r.hotRank <= 10 || r.coldRank <= 10)) row.className = 'notable';
+    const cells = r.m
+      ? [r.label, r.m.hotVal.toFixed(1), r.m.hotDate, `#${r.hotRank} of ${r.n}`,
+         r.m.coldVal.toFixed(1), r.m.coldDate, `#${r.coldRank} of ${r.n}`]
+      : [r.label, '—', '—', '—', '—', '—', '—'];
+    fillRow(row, cells, false, { 0: 'col-label' });
+  }
+}
+
+(async () => {
+  const stations = await loadStations();
+  const activeKey = currentStationKey(stations);
+  const cfg = stations[activeKey];
+
+  initStationNav(document.getElementById('locationSelect'), stations, activeKey);
+  document.getElementById('stationTag').textContent = `${cfg.name} · ${stationLabel(cfg)}`;
+  document.title = `${cfg.name} — Extreme Temperatures`;
+  document.getElementById('startYear').textContent = cfg.startYear;
+  document.getElementById('endYear').textContent = new Date().getFullYear();
+
+  let days = await loadAll(cfg);
+  const maxStats = windowedStats(days, 'max');
+  const minStats = windowedStats(days, 'min');
+  days = classifyDays(days, maxStats, minStats);
+
+  const computed = {
+    hotRuns: buildRuns(days, d => d.hot),
+    coldRuns: buildRuns(days, d => d.cold),
+    validMax: validDaysByYear(days, 'max'),
+    validMin: validDaysByYear(days, 'min'),
+    windows: {},
+  };
+  for (const N of DURATIONS) {
+    const hotWindows = buildAvgWindows(days, N, 'max');
+    const coldWindows = buildAvgWindows(days, N, 'min');
+    computed.windows[N] = {
+      hotWindows, coldWindows,
+      hotEvents: dedupeExtreme(hotWindows, N, 'hot'),
+      coldEvents: dedupeExtreme(coldWindows, N, 'cold'),
+    };
+  }
+
+  const windowSel = document.getElementById('durationSelect');
+  windowSel.addEventListener('change', () => renderWindowParts(computed, parseInt(windowSel.value)));
+
+  render(computed, days);
+  renderWindowParts(computed, parseInt(windowSel.value));
+})();
+</script>
+</body>
+</html>
