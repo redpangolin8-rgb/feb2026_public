@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <title>Extreme Temperatures</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="js/stations.js"></script>
 <style>
   :root {
@@ -106,6 +108,7 @@
   <p>Record highs/lows, heat waves, and cold snaps — each defined relative to this station's own climatology, and how the present compares · <span id="startYear"></span>–<span id="endYear"></span></p>
   <span class="station-tag" id="stationTag">Loading…</span>
   <select id="locationSelect" style="margin-left:10px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:0.78rem;padding:3px 8px;border:1px solid var(--ink);border-radius:2px;"></select>
+  <div id="stationMap" style="width:260px;height:170px;border:1px solid var(--line);border-radius:4px;margin-top:10px;"></div>
   <nav>
     <a href="index.html">← Home</a>
     <a href="weather.html">Weather History</a>
@@ -838,6 +841,7 @@ function fillMonthlyMeanRank(days, monthlyMeans) {
   const cfg = stations[activeKey];
 
   initStationNav(document.getElementById('locationSelect'), stations, activeKey);
+  initStationMap('stationMap', cfg);
   document.getElementById('stationTag').textContent = `${cfg.name} · ${stationLabel(cfg)}`;
   document.title = `${cfg.name} — Extreme Temperatures`;
   document.getElementById('startYear').textContent = cfg.startYear;

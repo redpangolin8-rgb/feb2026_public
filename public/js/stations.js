@@ -126,3 +126,36 @@ function initStationNav(selectEl, stations, activeKey) {
     location.search = params.toString();
   });
 }
+
+// Renders a small, non-interactive context map for a station's location
+// using Leaflet + OpenStreetMap tiles. The station dropdown navigates via a
+// full page reload (see initStationNav above), so the map only ever needs
+// to be drawn once per page load for the current station — no separate
+// "update on change" handling is needed. No-ops quietly if Leaflet isn't
+// loaded or the station has no coordinates, so pages that skip the
+// Leaflet <script>/<link> tags keep working without a map.
+const _stationMaps = {};  // divId -> Leaflet map instance, so repeated calls (e.g. compare.html on every station switch) don't hit Leaflet's "container already initialized" error
+function initStationMap(divId, cfg) {
+  const mapEl = document.getElementById(divId);
+  if (!mapEl || typeof L === 'undefined' || cfg.lat === undefined || cfg.lon === undefined) return null;
+  if (_stationMaps[divId]) {
+    _stationMaps[divId].remove();
+    delete _stationMaps[divId];
+  }
+  const map = L.map(divId, {
+    zoomControl: false,
+    dragging: false,
+    scrollWheelZoom: false,
+    doubleClickZoom: false,
+    boxZoom: false,
+    touchZoom: false,
+    keyboard: false,
+  }).setView([cfg.lat, cfg.lon], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 12,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }).addTo(map);
+  L.marker([cfg.lat, cfg.lon]).addTo(map).bindPopup(cfg.name);
+  _stationMaps[divId] = map;
+  return map;
+}

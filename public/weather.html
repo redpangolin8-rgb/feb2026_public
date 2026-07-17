@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <title>Fredericton — Daily Weather History</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="js/stations.js"></script>
 <style>
   :root {
@@ -133,6 +135,7 @@
   <h1>Daily Weather History</h1>
   <p>Max / min temperature and precipitation</p>
   <span class="station-tag" id="stationTag">Loading…</span>
+  <div id="stationMap" style="width:260px;height:170px;border:1px solid var(--line);border-radius:4px;margin-top:10px;"></div>
   <nav>
     <a href="index.html">← Home</a>
     <a href="stats.html">Climate Statistics</a>
@@ -451,6 +454,7 @@ function populateRawStationSelect(cfg) {
   activeCfg = stations[activeKey];
 
   initStationNav(document.getElementById('locationSelect'), stations, activeKey);
+  initStationMap('stationMap', activeCfg);
   populateRawStationSelect(activeCfg);
   document.getElementById('stationTag').textContent = `${activeCfg.name} · ${stationLabel(activeCfg)}`;
   document.title = `${activeCfg.name} — Daily Weather History`;

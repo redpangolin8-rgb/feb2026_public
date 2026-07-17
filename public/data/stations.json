@@ -3,6 +3,8 @@
     "name": "Fredericton",
     "province": "NB",
     "startYear": 1871,
+    "lat": 45.87,
+    "lon": -66.54,
     "segments": [
       { "id": 6159, "until": 1951 },
       { "id": 6157, "until": 2010 },
@@ -13,6 +15,8 @@
     "name": "Creston",
     "province": "BC",
     "startYear": 1912,
+    "lat": 49.1,
+    "lon": -116.52,
     "segments": [
       { "id": 1111 }
     ]
@@ -21,6 +25,8 @@
     "name": "Lister",
     "province": "BC",
     "startYear": 1956,
+    "lat": 49.03,
+    "lon": -116.46,
     "segments": [
       { "id": 1130 }
     ]
@@ -29,6 +35,8 @@
     "name": "Creston Campbell Scientific",
     "province": "BC",
     "startYear": 1993,
+    "lat": 49.08,
+    "lon": -116.5,
     "segments": [
       { "id": 6838 }
     ]
@@ -37,6 +45,8 @@
     "name": "Creston (Combined)",
     "province": "BC",
     "startYear": 1912,
+    "lat": 49.1,
+    "lon": -116.52,
     "virtual": true,
     "mergeSources": [1111, 6838],
     "segments": [
@@ -47,6 +57,8 @@
     "name": "Pond Inlet",
     "province": "NU",
     "startYear": 1922,
+    "lat": 72.69,
+    "lon": -77.97,
     "segments": [
       { "id": 1773, "until": 1975 },
       { "id": 1774, "until": 2013 },
@@ -57,6 +69,8 @@
     "name": "Cambridge Bay",
     "province": "NU",
     "startYear": 1929,
+    "lat": 69.11,
+    "lon": -105.14,
     "segments": [
       { "id": 1786, "until": 2015 },
       { "id": 53512, "from": 2015 }
@@ -66,6 +80,8 @@
     "name": "Dawson",
     "province": "YT",
     "startYear": 1897,
+    "lat": 64.06,
+    "lon": -139.13,
     "segments": [
       { "id": 1534, "until": 1976 },
       { "id": 1535, "until": 1995 },
@@ -76,6 +92,8 @@
     "name": "Whitehorse",
     "province": "YT",
     "startYear": 1900,
+    "lat": 60.71,
+    "lon": -135.07,
     "segments": [
       { "id": 1616, "until": 1942 },
       { "id": 1617, "until": 2012 },
@@ -86,6 +104,8 @@
     "name": "Fort McPherson",
     "province": "NT",
     "startYear": 1892,
+    "lat": 67.41,
+    "lon": -134.86,
     "segments": [
       { "id": 1647, "until": 1981 },
       { "id": 1648, "until": 2018 },
@@ -96,6 +116,8 @@
     "name": "Hay River",
     "province": "NT",
     "startYear": 1893,
+    "lat": 60.84,
+    "lon": -115.78,
     "segments": [
       { "id": 1663, "until": 1943 },
       { "id": 1664, "until": 2014 },
@@ -106,6 +128,8 @@
     "name": "Sachs Harbour",
     "province": "NT",
     "startYear": 1955,
+    "lat": 71.99,
+    "lon": -125.25,
     "segments": [
       { "id": 1794, "until": 1994 },
       { "id": 10076, "from": 1994 }
@@ -115,6 +139,8 @@
     "name": "Toronto",
     "province": "ON",
     "startYear": 1840,
+    "lat": 43.67,
+    "lon": -79.4,
     "segments": [
       { "id": 5051, "until": 2018 },
       { "id": 31688, "from": 2018 }
@@ -124,6 +150,8 @@
     "name": "Mactaquac Provincial Park",
     "province": "NB",
     "startYear": 1973,
+    "lat": 45.95,
+    "lon": -66.9,
     "segments": [
       { "id": 6194 }
     ]
@@ -132,6 +160,8 @@
     "name": "Saint John",
     "province": "NB",
     "startYear": 1871,
+    "lat": 45.28,
+    "lon": -66.08,
     "segments": [
       { "id": 6248 }
     ]
@@ -140,6 +170,8 @@
     "name": "Saint John A",
     "province": "NB",
     "startYear": 1946,
+    "lat": 45.32,
+    "lon": -65.89,
     "segments": [
       { "id": 6250, "until": 2012 },
       { "id": 50310, "from": 2012 }
@@ -149,6 +181,8 @@
     "name": "Point Lepreau",
     "province": "NB",
     "startYear": 1872,
+    "lat": 45.07,
+    "lon": -66.47,
     "segments": [
       { "id": 6229 }
     ]
@@ -157,6 +191,8 @@
     "name": "Point Lepreau CS",
     "province": "NB",
     "startYear": 1992,
+    "lat": 45.06,
+    "lon": -66.46,
     "segments": [
       { "id": 27746 }
     ]
@@ -165,6 +201,8 @@
     "name": "Georgetown WWTP",
     "province": "ON",
     "startYear": 1962,
+    "lat": 43.64,
+    "lon": -79.88,
     "segments": [
       { "id": 4923 }
     ]
@@ -173,6 +211,8 @@
     "name": "Brampton",
     "province": "ON",
     "startYear": 1870,
+    "lat": 43.7,
+    "lon": -79.77,
     "segments": [
       { "id": 4875 }
     ]
@@ -181,6 +221,8 @@
     "name": "Quatsino",
     "province": "BC",
     "startYear": 1895,
+    "lat": 50.53,
+    "lon": -127.65,
     "segments": [
       { "id": 271 }
     ]
@@ -189,6 +231,8 @@
     "name": "Comox A",
     "province": "BC",
     "startYear": 1944,
+    "lat": 49.72,
+    "lon": -124.9,
     "segments": [
       { "id": 155 }
     ]
@@ -197,6 +241,8 @@
     "name": "Vancouver Harbour CS",
     "province": "BC",
     "startYear": 1925,
+    "lat": 49.3,
+    "lon": -123.12,
     "segments": [
       { "id": 888 }
     ]
@@ -205,6 +251,8 @@
     "name": "White Rock Campbell Scientific",
     "province": "BC",
     "startYear": 1929,
+    "lat": 49.02,
+    "lon": -122.78,
     "segments": [
       { "id": 925 }
     ]
@@ -213,6 +261,8 @@
     "name": "N Vancouver Wharves",
     "province": "BC",
     "startYear": 1962,
+    "lat": 49.31,
+    "lon": -123.12,
     "segments": [
       { "id": 833 }
     ]

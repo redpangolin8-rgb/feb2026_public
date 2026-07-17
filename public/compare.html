@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <title>Station Comparison — Climate Statistics</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="js/stations.js"></script>
 <style>
   :root {
@@ -88,10 +90,12 @@
     <div class="picker">
       <label><span class="swatch" style="background:var(--a)"></span>Station A</label>
       <select id="stationA"></select>
+      <div id="stationMapA" style="width:220px;height:140px;border:1px solid var(--line);border-radius:4px;"></div>
     </div>
     <div class="picker">
       <label><span class="swatch" style="background:var(--b)"></span>Station B</label>
       <select id="stationB"></select>
+      <div id="stationMapB" style="width:220px;height:140px;border:1px solid var(--line);border-radius:4px;"></div>
     </div>
     <div class="picker">
       <label>Options</label>
@@ -597,6 +601,8 @@ function renderAll(dataA, dataB, cfgA, cfgB) {
   async function reload() {
     const keyA = selA.value, keyB = selB.value;
     const cfgA = stations[keyA], cfgB = stations[keyB];
+    initStationMap('stationMapA', cfgA);
+    initStationMap('stationMapB', cfgB);
     document.getElementById('status').textContent = `Loading ${cfgA.name} and ${cfgB.name}…`;
     const [dataA, dataB] = await Promise.all([
       (cache.keyA === keyA && cache.dataA) ? cache.dataA : loadAll(cfgA),
