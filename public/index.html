@@ -198,6 +198,12 @@
   document.getElementById('startYear').textContent = minStartYear;
   document.getElementById('stationTag').textContent =
     `${cfgs.length} location${cfgs.length === 1 ? '' : 's'} · ECCC`;
+
+  // If we arrived here with a station still in the URL (e.g. via another
+  // page's "← Home" link), keep carrying it into the cards below so picking
+  // a different view doesn't reset the user back to that page's default.
+  const incomingKey = new URLSearchParams(location.search).get('station');
+  if (incomingKey && stations[incomingKey]) carryStationInLinks(incomingKey);
 })();
 </script>
 </body>

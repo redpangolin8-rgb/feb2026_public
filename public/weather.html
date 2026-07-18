@@ -455,6 +455,7 @@ function populateRawStationSelect(cfg) {
 
   initStationNav(document.getElementById('locationSelect'), stations, activeKey);
   initStationMap('stationMap', activeCfg);
+  carryStationInLinks(activeKey);
   populateRawStationSelect(activeCfg);
   document.getElementById('stationTag').textContent = `${activeCfg.name} · ${stationLabel(activeCfg)}`;
   document.title = `${activeCfg.name} — Daily Weather History`;

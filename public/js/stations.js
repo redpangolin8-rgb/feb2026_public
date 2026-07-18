@@ -127,6 +127,22 @@ function initStationNav(selectEl, stations, activeKey) {
   });
 }
 
+// Rewrites every local *.html link inside the page's <nav> to carry the
+// current station as a ?station= query param, so following a nav link (or
+// a card link on index.html) lands on the same location instead of
+// resetting to that page's default. External links (e.g. the feedback
+// form) are left untouched.
+function carryStationInLinks(activeKey) {
+  if (!activeKey) return;
+  for (const a of document.querySelectorAll('nav a[href], a.card[href]')) {
+    const href = a.getAttribute('href');
+    if (!href || /^https?:\/\//.test(href)) continue;
+    const url = new URL(href, location.href);
+    url.searchParams.set('station', activeKey);
+    a.setAttribute('href', url.pathname + url.search);
+  }
+}
+
 // Renders a small, non-interactive context map for a station's location
 // using Leaflet + OpenStreetMap tiles. The station dropdown navigates via a
 // full page reload (see initStationNav above), so the map only ever needs

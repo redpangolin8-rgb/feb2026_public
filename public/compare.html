@@ -561,8 +561,9 @@ function renderAll(dataA, dataB, cfgA, cfgB) {
     sel.textContent = '';
     buildProvinceOptions(sel, stations, null);
   }
-  selA.value = keys[0];
-  selB.value = keys.length > 1 ? keys[1] : keys[0];
+  const incomingKey = new URLSearchParams(location.search).get('station');
+  selA.value = (incomingKey && stations[incomingKey]) ? incomingKey : keys[0];
+  selB.value = keys.length > 1 ? (keys.find(k => k !== selA.value) || keys[0]) : keys[0];
 
   const cache = { keyA: null, keyB: null, dataA: null, dataB: null };
   const overlapChk = document.getElementById('overlapOnly');
@@ -603,6 +604,7 @@ function renderAll(dataA, dataB, cfgA, cfgB) {
     const cfgA = stations[keyA], cfgB = stations[keyB];
     initStationMap('stationMapA', cfgA);
     initStationMap('stationMapB', cfgB);
+    carryStationInLinks(keyA);
     document.getElementById('status').textContent = `Loading ${cfgA.name} and ${cfgB.name}…`;
     const [dataA, dataB] = await Promise.all([
       (cache.keyA === keyA && cache.dataA) ? cache.dataA : loadAll(cfgA),

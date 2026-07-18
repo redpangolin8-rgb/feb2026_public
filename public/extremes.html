@@ -576,6 +576,7 @@ function render(computed, days, N) {
 
   initStationNav(document.getElementById('locationSelect'), stations, activeKey);
   initStationMap('stationMap', cfg);
+  carryStationInLinks(activeKey);
   document.getElementById('stationTag').textContent = `${cfg.name} · ${stationLabel(cfg)}`;
   document.title = `${cfg.name} — Extreme Precipitation`;
   document.getElementById('startYear').textContent = cfg.startYear;

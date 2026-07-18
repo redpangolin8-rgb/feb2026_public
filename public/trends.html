@@ -428,6 +428,7 @@ function render(monthly, years, varKey, periodKey) {
 
   initStationNav(document.getElementById('locationSelect'), stations, activeKey);
   initStationMap('stationMap', cfg);
+  carryStationInLinks(activeKey);
   document.getElementById('stationTag').textContent = `${cfg.name} · ${stationLabel(cfg)}`;
   document.title = `${cfg.name} — Trends & Rankings`;
   document.getElementById('startYear').textContent = cfg.startYear;

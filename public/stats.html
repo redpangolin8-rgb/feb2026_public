@@ -325,6 +325,7 @@ function renderAll(byMMDD) {
 
   initStationNav(document.getElementById('locationSelect'), stations, activeKey);
   initStationMap('stationMap', cfg);
+  carryStationInLinks(activeKey);
   document.getElementById('stationTag').textContent = `${cfg.name} · ${stationLabel(cfg)}`;
   document.title = `${cfg.name} — Climate Statistics`;
 

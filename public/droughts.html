@@ -662,6 +662,7 @@ function render(computed, days) {
 
   initStationNav(document.getElementById('locationSelect'), stations, activeKey);
   initStationMap('stationMap', cfg);
+  carryStationInLinks(activeKey);
   document.getElementById('stationTag').textContent = `${cfg.name} · ${stationLabel(cfg)}`;
   document.title = `${cfg.name} — Dry Spells & Drought`;
   document.getElementById('startYear').textContent = cfg.startYear;
