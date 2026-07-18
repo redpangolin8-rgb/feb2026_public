@@ -266,5 +266,25 @@
     "segments": [
       { "id": 833 }
     ]
+  },
+  "west_vancouver_aut": {
+    "name": "West Vancouver AUT",
+    "province": "BC",
+    "startYear": 1992,
+    "lat": 49.35,
+    "lon": -123.19,
+    "segments": [
+      { "id": 6833 }
+    ]
+  },
+  "grouse_mtn": {
+    "name": "N Vanc Grouse Mtn Resort",
+    "province": "BC",
+    "startYear": 1971,
+    "lat": 49.38,
+    "lon": -123.08,
+    "segments": [
+      { "id": 823 }
+    ]
   }
 }
