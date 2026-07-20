@@ -47,6 +47,17 @@
     font-family: inherit; padding: 6px 8px; border: 1px solid var(--line);
     border-radius: 3px; font-size: 0.9rem; min-width: 140px;
   }
+  .field input[type=number] {
+    font-family: inherit; padding: 6px 8px; border: 1px solid var(--line);
+    border-radius: 3px; font-size: 0.9rem; width: 80px;
+  }
+  button.secondary {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background: transparent; color: var(--ink); border: 1px solid var(--ink);
+    padding: 6px 10px; border-radius: 3px; font-size: 1rem; cursor: pointer;
+  }
+  button.secondary:hover { background: rgba(26,35,48,0.06); }
+  button.secondary:disabled { opacity: 0.35; cursor: default; }
   .status {
     font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem;
     color: #777; margin: 4px 0 18px; min-height: 1.2em;
@@ -126,6 +137,14 @@
         <option value="90">90-day</option>
       </select>
     </div>
+    <div class="field">
+      <label for="yearInput">Year (past-12-months chart)</label>
+      <div style="display:flex;gap:4px;align-items:center">
+        <button id="yearPrev" class="secondary">&#8249;</button>
+        <input type="number" id="yearInput" placeholder="Current">
+        <button id="yearNext" class="secondary">&#8250;</button>
+      </div>
+    </div>
   </div>
 
   <div class="status" id="status">Loading data…</div>
@@ -133,7 +152,7 @@
   <div class="headline" id="headline"></div>
 
   <div class="chart-card">
-    <h2>Past 12 months · daily precipitation and running dry-spell length</h2>
+    <h2 id="recentTitle">Past 12 months · daily precipitation and running dry-spell length</h2>
     <p class="chart-note" id="recentContext"></p>
     <canvas id="recentChart" height="260"></canvas>
   </div>
@@ -199,6 +218,7 @@
 
 <script>
 let recentChart = null, spellAmaxChart = null, driestAmaxChart = null, seasonalChart = null;
+let selectedYear = null;  // null = rolling past-12-months; otherwise a calendar year
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DRY_THRESHOLD = 1.0;   // mm — ETCCDI "dry day"
@@ -560,9 +580,12 @@ function render(computed, days) {
     r => ({ dates: fmtRange(r.startDate, r.endDate) + (r.ongoing ? ' (ongoing)' : ''), value: String(r.len) }),
     r => runsByLen.filter(e => e.len > r.len).length + 1);
 
-  // ── Past 12 months: daily precip bars + running dry-spell counter ────────
+  // ── Past 12 months / selected-year: daily precip bars + dry-spell counter ─
   const lastT = days.length ? days[days.length - 1].t : 0;
-  const recentDays = days.filter(day => day.t > lastT - 365);
+  const recentDays = selectedYear === null
+    ? days.filter(day => day.t > lastT - 365)
+    : days.filter(day => day.d.slice(0, 4) === String(selectedYear));
+  const periodLabel = selectedYear === null ? 'Past 12 months' : String(selectedYear);
   const labels = recentDays.map(day => day.d);
   const daily = recentDays.map(day => day.v);
   const dryLen = [];
@@ -586,6 +609,8 @@ function render(computed, days) {
     datasets.push({ label: `Record spell (${record.len} days)`, data: labels.map(() => record.len), type: 'line', borderColor: 'rgba(26,35,48,0.7)', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [2, 3], pointRadius: 0, yAxisID: 'y2', order: 1 });
   }
 
+  document.getElementById('recentTitle').textContent =
+    `${periodLabel} · daily precipitation and running dry-spell length`;
   document.getElementById('recentContext').textContent = 'Shaded columns are days with no precipitation data.';
   if (recentChart) recentChart.destroy();
   recentChart = new Chart(document.getElementById('recentChart'), {
@@ -718,6 +743,28 @@ function render(computed, days) {
 
   const windowSel = document.getElementById('windowSelect');
   windowSel.addEventListener('change', () => renderWindowParts(computed, parseInt(windowSel.value)));
+
+  // Year controls for the past-12-months chart: null = rolling past-12-months
+  // (the default), otherwise a specific calendar year (Jan 1 – Dec 31).
+  const thisYear = new Date().getFullYear();
+  const yearInput = document.getElementById('yearInput');
+  const yearPrev = document.getElementById('yearPrev');
+  const yearNext = document.getElementById('yearNext');
+  yearInput.min = cfg.startYear;
+  yearInput.max = thisYear;
+
+  function setYear(y) {
+    selectedYear = y === null ? null : Math.min(thisYear, Math.max(cfg.startYear, y));
+    yearInput.value = selectedYear === null ? '' : selectedYear;
+    yearPrev.disabled = selectedYear === cfg.startYear;
+    yearNext.disabled = selectedYear === null;
+    render(computed, days);
+  }
+  yearPrev.addEventListener('click', () => setYear(selectedYear === null ? thisYear : selectedYear - 1));
+  yearNext.addEventListener('click', () => setYear(selectedYear === thisYear ? null : selectedYear + 1));
+  yearInput.addEventListener('change', () => setYear(yearInput.value === '' ? null : parseInt(yearInput.value)));
+  yearPrev.disabled = false;
+  yearNext.disabled = true;  // starts in rolling mode — nothing "later" to step to
 
   render(computed, days);
   renderWindowParts(computed, parseInt(windowSel.value));

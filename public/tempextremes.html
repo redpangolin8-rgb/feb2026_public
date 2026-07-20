@@ -47,6 +47,17 @@
     font-family: inherit; padding: 6px 8px; border: 1px solid var(--line);
     border-radius: 3px; font-size: 0.9rem; min-width: 140px;
   }
+  .field input[type=number] {
+    font-family: inherit; padding: 6px 8px; border: 1px solid var(--line);
+    border-radius: 3px; font-size: 0.9rem; width: 80px;
+  }
+  button.secondary {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background: transparent; color: var(--ink); border: 1px solid var(--ink);
+    padding: 6px 10px; border-radius: 3px; font-size: 1rem; cursor: pointer;
+  }
+  button.secondary:hover { background: rgba(26,35,48,0.06); }
+  button.secondary:disabled { opacity: 0.35; cursor: default; }
   .status {
     font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.85rem;
     color: #777; margin: 4px 0 18px; min-height: 1.2em;
@@ -133,6 +144,14 @@
         <option value="7">7-day</option>
       </select>
     </div>
+    <div class="field">
+      <label for="yearInput">Year (past-12-months charts)</label>
+      <div style="display:flex;gap:4px;align-items:center">
+        <button id="yearPrev" class="secondary">&#8249;</button>
+        <input type="number" id="yearInput" placeholder="Current">
+        <button id="yearNext" class="secondary">&#8250;</button>
+      </div>
+    </div>
   </div>
 
   <div class="status" id="status">Loading data…</div>
@@ -140,13 +159,13 @@
   <div class="headline" id="headline"></div>
 
   <div class="chart-card">
-    <h2>Past 12 months · daily max temp and running heat-wave length</h2>
+    <h2 id="recentHotTitle">Past 12 months · daily max temp and running heat-wave length</h2>
     <p class="chart-note" id="recentHotContext"></p>
     <canvas id="recentHotChart" height="280"></canvas>
   </div>
 
   <div class="chart-card">
-    <h2>Past 12 months · daily min temp and running cold-snap length</h2>
+    <h2 id="recentColdTitle">Past 12 months · daily min temp and running cold-snap length</h2>
     <p class="chart-note" id="recentColdContext"></p>
     <canvas id="recentColdChart" height="280"></canvas>
   </div>
@@ -239,6 +258,7 @@
 
 <script>
 let recentHotChart = null, recentColdChart = null, amaxChart = null, spellAmaxChart = null;
+let selectedYear = null;  // null = rolling past-12-months; otherwise a calendar year
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTH_DAYS  = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -629,9 +649,12 @@ function render(computed, days) {
     r => ({ dates: fmtRange(r.startDate, r.endDate) + (r.ongoing ? ' (ongoing)' : ''), value: String(r.len) }),
     r => coldByLen.filter(e => e.len > r.len).length + 1);
 
-  // ── Past 12 months: daily max/min + running hot/cold streak counters ─────
+  // ── Past 12 months / selected year: daily max/min + hot/cold streaks ─────
   const lastT = days.length ? days[days.length - 1].t : 0;
-  const recentDays = days.filter(day => day.t > lastT - 365);
+  const recentDays = selectedYear === null
+    ? days.filter(day => day.t > lastT - 365)
+    : days.filter(day => day.d.slice(0, 4) === String(selectedYear));
+  const periodLabel = selectedYear === null ? 'Past 12 months' : String(selectedYear);
   const labels = recentDays.map(day => day.d);
   const maxSeries = recentDays.map(day => day.max);
   const minSeries = recentDays.map(day => day.min);
@@ -653,6 +676,10 @@ function render(computed, days) {
 
   const hotRecord = hotByLen[0] ?? null;
   const coldRecord = coldByLen[0] ?? null;
+  document.getElementById('recentHotTitle').textContent =
+    `${periodLabel} · daily max temp and running heat-wave length`;
+  document.getElementById('recentColdTitle').textContent =
+    `${periodLabel} · daily min temp and running cold-snap length`;
   document.getElementById('recentHotContext').textContent =
     (hotRecord ? `All-time longest heat wave: ${hotRecord.len} days (${fmtRange(hotRecord.startDate, hotRecord.endDate)}). ` : '') +
     'Shaded columns are days with no max-temp data.';
@@ -961,6 +988,28 @@ function fillMonthlyMeanRank(days, monthlyMeans) {
 
   const windowSel = document.getElementById('durationSelect');
   windowSel.addEventListener('change', () => renderWindowParts(computed, parseInt(windowSel.value)));
+
+  // Year controls for the past-12-months charts: null = rolling past-12-months
+  // (the default), otherwise a specific calendar year (Jan 1 – Dec 31).
+  const thisYear = new Date().getFullYear();
+  const yearInput = document.getElementById('yearInput');
+  const yearPrev = document.getElementById('yearPrev');
+  const yearNext = document.getElementById('yearNext');
+  yearInput.min = cfg.startYear;
+  yearInput.max = thisYear;
+
+  function setYear(y) {
+    selectedYear = y === null ? null : Math.min(thisYear, Math.max(cfg.startYear, y));
+    yearInput.value = selectedYear === null ? '' : selectedYear;
+    yearPrev.disabled = selectedYear === cfg.startYear;
+    yearNext.disabled = selectedYear === null;
+    render(computed, days);
+  }
+  yearPrev.addEventListener('click', () => setYear(selectedYear === null ? thisYear : selectedYear - 1));
+  yearNext.addEventListener('click', () => setYear(selectedYear === thisYear ? null : selectedYear + 1));
+  yearInput.addEventListener('change', () => setYear(yearInput.value === '' ? null : parseInt(yearInput.value)));
+  yearPrev.disabled = false;
+  yearNext.disabled = true;  // starts in rolling mode — nothing "later" to step to
 
   render(computed, days);
   renderWindowParts(computed, parseInt(windowSel.value));
