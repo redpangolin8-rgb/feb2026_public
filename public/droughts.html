@@ -89,6 +89,10 @@
     font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
     color: #999; margin-top: 14px; line-height: 1.5;
   }
+  .chart-note {
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 0.82rem;
+    color: #666; margin: -4px 0 12px;
+  }
 </style>
 </head>
 <body>
@@ -130,6 +134,7 @@
 
   <div class="chart-card">
     <h2>Past 12 months · daily precipitation and running dry-spell length</h2>
+    <p class="chart-note" id="recentContext"></p>
     <canvas id="recentChart" height="260"></canvas>
   </div>
 
@@ -335,6 +340,32 @@ function validDaysByYear(days) {
 
 function fmtRange(startDate, endDate) {
   return startDate === endDate ? endDate : `${startDate} → ${endDate}`;
+}
+
+// Chart.js plugin: shades the column behind each day where isMissing(index)
+// is true, so a data gap (which silently ends a dry spell the same way a
+// rainy day does) reads as a distinct region instead of blending in with an
+// ordinary day. Draws directly on the canvas rather than as a dataset,
+// since a second bar dataset sharing the x-axis would get grouped
+// side-by-side with the real one instead of sitting behind it full-width.
+function noDataBandPlugin(isMissing) {
+  return {
+    id: 'noDataBand',
+    beforeDatasetsDraw(chart) {
+      const { ctx, chartArea, scales: { x } } = chart;
+      const n = chart.data.labels.length;
+      if (n < 2) return;
+      const step = x.getPixelForValue(1) - x.getPixelForValue(0);
+      ctx.save();
+      ctx.fillStyle = 'rgba(120,120,120,0.14)';
+      for (let i = 0; i < n; i++) {
+        if (!isMissing(i)) continue;
+        const cx = x.getPixelForValue(i);
+        ctx.fillRect(cx - step / 2, chartArea.top, step, chartArea.bottom - chartArea.top);
+      }
+      ctx.restore();
+    },
+  };
 }
 
 function fillTable(tableEl, rows, valueHeader, recentCutoff) {
@@ -555,10 +586,12 @@ function render(computed, days) {
     datasets.push({ label: `Record spell (${record.len} days)`, data: labels.map(() => record.len), type: 'line', borderColor: 'rgba(26,35,48,0.7)', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [2, 3], pointRadius: 0, yAxisID: 'y2', order: 1 });
   }
 
+  document.getElementById('recentContext').textContent = 'Shaded columns are days with no precipitation data.';
   if (recentChart) recentChart.destroy();
   recentChart = new Chart(document.getElementById('recentChart'), {
     type: 'bar',
     data: { labels, datasets },
+    plugins: [noDataBandPlugin(i => recentDays[i].v === null)],
     options: {
       responsive: true,
       animation: false,

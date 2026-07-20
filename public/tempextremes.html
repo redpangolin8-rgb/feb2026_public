@@ -442,6 +442,32 @@ function fmtRange(startDate, endDate) {
 
 function fmt(v) { return v !== null ? +v.toFixed(2) : null; }
 
+// Chart.js plugin: shades the column behind each day where isMissing(index)
+// is true, so a data gap (which silently ends a heat-wave/cold-snap streak
+// the same way an ordinary day does) reads as a distinct region instead of
+// blending in. Draws directly on the canvas rather than as a dataset, since
+// a second bar dataset sharing the x-axis would get grouped side-by-side
+// with the streak bar instead of sitting behind everything full-width.
+function noDataBandPlugin(isMissing) {
+  return {
+    id: 'noDataBand',
+    beforeDatasetsDraw(chart) {
+      const { ctx, chartArea, scales: { x } } = chart;
+      const n = chart.data.labels.length;
+      if (n < 2) return;
+      const step = x.getPixelForValue(1) - x.getPixelForValue(0);
+      ctx.save();
+      ctx.fillStyle = 'rgba(120,120,120,0.14)';
+      for (let i = 0; i < n; i++) {
+        if (!isMissing(i)) continue;
+        const cx = x.getPixelForValue(i);
+        ctx.fillRect(cx - step / 2, chartArea.top, step, chartArea.bottom - chartArea.top);
+      }
+      ctx.restore();
+    },
+  };
+}
+
 // Climatological mean / ±1σ / ±2σ band for each day in `recentDays`, looked
 // up from the day-of-year windowedStats() array (the same stats used to
 // classify hot/cold days) via that date's calendar position — resampled
@@ -628,9 +654,11 @@ function render(computed, days) {
   const hotRecord = hotByLen[0] ?? null;
   const coldRecord = coldByLen[0] ?? null;
   document.getElementById('recentHotContext').textContent =
-    hotRecord ? `All-time longest heat wave: ${hotRecord.len} days (${fmtRange(hotRecord.startDate, hotRecord.endDate)}).` : '';
+    (hotRecord ? `All-time longest heat wave: ${hotRecord.len} days (${fmtRange(hotRecord.startDate, hotRecord.endDate)}). ` : '') +
+    'Shaded columns are days with no max-temp data.';
   document.getElementById('recentColdContext').textContent =
-    coldRecord ? `All-time longest cold snap: ${coldRecord.len} days (${fmtRange(coldRecord.startDate, coldRecord.endDate)}).` : '';
+    (coldRecord ? `All-time longest cold snap: ${coldRecord.len} days (${fmtRange(coldRecord.startDate, coldRecord.endDate)}). ` : '') +
+    'Shaded columns are days with no min-temp data.';
 
   if (recentHotChart) recentHotChart.destroy();
   recentHotChart = new Chart(document.getElementById('recentHotChart'), {
@@ -643,6 +671,7 @@ function render(computed, days) {
         { label: 'Heat wave streak (days)', data: hotStreak, type: 'bar', backgroundColor: 'rgba(192,83,62,0.35)', yAxisID: 'y2', order: 3 },
       ]
     },
+    plugins: [noDataBandPlugin(i => recentDays[i].max === null)],
     options: {
       responsive: true,
       animation: false,
@@ -667,6 +696,7 @@ function render(computed, days) {
         { label: 'Cold snap streak (days)', data: coldStreak, type: 'bar', backgroundColor: 'rgba(47,111,143,0.35)', yAxisID: 'y2', order: 3 },
       ]
     },
+    plugins: [noDataBandPlugin(i => recentDays[i].min === null)],
     options: {
       responsive: true,
       animation: false,

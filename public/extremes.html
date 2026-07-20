@@ -315,6 +315,32 @@ function fmtEventDates(ev) {
   return ev.startDate === ev.endDate ? ev.endDate : `${ev.startDate} → ${ev.endDate}`;
 }
 
+// Chart.js plugin: shades the column behind each day where isMissing(index)
+// is true, so a data gap (which silently ends a streak/window the same way
+// a non-qualifying day does) reads as a distinct region instead of blending
+// in with an ordinary day. Draws directly on the canvas rather than as a
+// dataset, since a second bar dataset sharing the x-axis would get grouped
+// side-by-side with the real one instead of sitting behind it full-width.
+function noDataBandPlugin(isMissing) {
+  return {
+    id: 'noDataBand',
+    beforeDatasetsDraw(chart) {
+      const { ctx, chartArea, scales: { x } } = chart;
+      const n = chart.data.labels.length;
+      if (n < 2) return;
+      const step = x.getPixelForValue(1) - x.getPixelForValue(0);
+      ctx.save();
+      ctx.fillStyle = 'rgba(120,120,120,0.14)';
+      for (let i = 0; i < n; i++) {
+        if (!isMissing(i)) continue;
+        const cx = x.getPixelForValue(i);
+        ctx.fillRect(cx - step / 2, chartArea.top, step, chartArea.bottom - chartArea.top);
+      }
+      ctx.restore();
+    },
+  };
+}
+
 // Inserts a header or body row, tagging the given column indices with a
 // class (e.g. 'col-date') instead of styling by position, since different
 // tables on this page put the date/label column in different places.
@@ -449,14 +475,15 @@ function render(computed, days, N) {
   // dashed line instead uses the last-25-years top-10 threshold, which sits
   // much closer to the past 12 months and better shows the range of daily
   // rainfall a visitor could plausibly expect to see today.
-  document.getElementById('recentContext').textContent = record
+  document.getElementById('recentContext').textContent = (record
     ? `All-time ${noun} record: ${record.total.toFixed(1)} mm (${fmtEventDates(record)}).` +
       (entryBar ? ` All-time top-10 threshold: ${entryBar.total.toFixed(1)} mm.` : '')
-    : '';
+    : '') + ' Shaded columns are days with no precipitation data.';
   if (recentChart) recentChart.destroy();
   recentChart = new Chart(document.getElementById('recentChart'), {
     type: 'bar',
     data: { labels, datasets },
+    plugins: [noDataBandPlugin(i => recentDays[i].v === null)],
     options: {
       responsive: true,
       animation: false,
