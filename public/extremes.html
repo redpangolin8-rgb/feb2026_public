@@ -409,7 +409,10 @@ function fillMonthlyRank(days) {
 function render(computed, days, N) {
   const { events, amax } = computed[N];
   const record = events[0] ?? null;
-  const entryBar = events[9] ?? null;  // value needed to crack the top 10
+  const entryBar = events[9] ?? null;  // value needed to crack the all-time top 10
+  const cutoff25 = new Date().getFullYear() - 24;
+  const recent25 = events.filter(ev => ev.year >= cutoff25);
+  const entryBar25 = recent25[9] ?? null;  // value needed to crack the last-25-years top 10
   const noun = N === 1 ? '1-day' : `${N}-day`;
 
   // ── Past 12 months chart ──────────────────────────────────────────────────
@@ -428,16 +431,21 @@ function render(computed, days, N) {
   if (N > 1) {
     datasets.push({ label: `${noun} total`, data: rolling, type: 'line', borderColor: 'rgba(47,111,143,1)', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.1, spanGaps: false, order: 2 });
   }
-  if (entryBar) {
-    datasets.push({ label: `Top-10 threshold (${entryBar.total.toFixed(1)} mm)`, data: labels.map(() => entryBar.total), type: 'line', borderColor: 'rgba(232,162,60,0.9)', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0, order: 1 });
+  if (entryBar25) {
+    datasets.push({ label: `25-yr top-10 threshold (${entryBar25.total.toFixed(1)} mm)`, data: labels.map(() => entryBar25.total), type: 'line', borderColor: 'rgba(232,162,60,0.9)', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0, order: 1 });
   }
 
   document.getElementById('recentTitle').textContent =
     `Past 12 months vs historical ${noun} extremes`;
-  // The record is stated as text rather than plotted — as a constant line it
-  // stretches the y-axis and squashes the daily bars into unreadability.
+  // The record and all-time top-10 threshold are stated as text rather than
+  // plotted — as constant lines spanning the all-time range they'd stretch
+  // the y-axis and squash the daily bars into unreadability. The plotted
+  // dashed line instead uses the last-25-years top-10 threshold, which sits
+  // much closer to the past 12 months and better shows the range of daily
+  // rainfall a visitor could plausibly expect to see today.
   document.getElementById('recentContext').textContent = record
-    ? `All-time ${noun} record: ${record.total.toFixed(1)} mm (${fmtEventDates(record)})`
+    ? `All-time ${noun} record: ${record.total.toFixed(1)} mm (${fmtEventDates(record)}).` +
+      (entryBar ? ` All-time top-10 threshold: ${entryBar.total.toFixed(1)} mm.` : '')
     : '';
   if (recentChart) recentChart.destroy();
   recentChart = new Chart(document.getElementById('recentChart'), {
