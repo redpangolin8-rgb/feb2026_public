@@ -129,6 +129,8 @@
         <option value="1">1-day</option>
         <option value="2">2-day</option>
         <option value="3">3-day</option>
+        <option value="5">5-day</option>
+        <option value="7">7-day</option>
       </select>
     </div>
   </div>
@@ -171,6 +173,8 @@
       <div class="rank-col"><h3>1-day</h3><div class="rank-scroll"><table class="rank" id="top1"></table></div></div>
       <div class="rank-col"><h3>2-day</h3><div class="rank-scroll"><table class="rank" id="top2"></table></div></div>
       <div class="rank-col"><h3>3-day</h3><div class="rank-scroll"><table class="rank" id="top3"></table></div></div>
+      <div class="rank-col"><h3>5-day</h3><div class="rank-scroll"><table class="rank" id="top5"></table></div></div>
+      <div class="rank-col"><h3>7-day</h3><div class="rank-scroll"><table class="rank" id="top7"></table></div></div>
     </div>
   </div>
 
@@ -180,6 +184,8 @@
       <div class="rank-col"><h3>1-day</h3><div class="rank-scroll"><table class="rank" id="recent1"></table></div></div>
       <div class="rank-col"><h3>2-day</h3><div class="rank-scroll"><table class="rank" id="recent2"></table></div></div>
       <div class="rank-col"><h3>3-day</h3><div class="rank-scroll"><table class="rank" id="recent3"></table></div></div>
+      <div class="rank-col"><h3>5-day</h3><div class="rank-scroll"><table class="rank" id="recent5"></table></div></div>
+      <div class="rank-col"><h3>7-day</h3><div class="rank-scroll"><table class="rank" id="recent7"></table></div></div>
     </div>
     <p class="footnote">
       Events are non-overlapping: a single storm counts once per duration, not once per rolling
@@ -198,7 +204,7 @@
 let recentChart = null, amaxChart = null, seasonalChart = null;
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const DURATIONS = [1, 2, 3];
+const DURATIONS = [1, 2, 3, 5, 7];
 const AMAX_MIN_DAYS = 300;
 
 function parseCSV(text) {
@@ -603,6 +609,8 @@ function render(computed, days, N) {
   fillTopTable(document.getElementById('top1'), computed[1].events, recentCutoff);
   fillTopTable(document.getElementById('top2'), computed[2].events, recentCutoff);
   fillTopTable(document.getElementById('top3'), computed[3].events, recentCutoff);
+  fillTopTable(document.getElementById('top5'), computed[5].events, recentCutoff);
+  fillTopTable(document.getElementById('top7'), computed[7].events, recentCutoff);
 
   const cutoff25 = new Date().getFullYear() - 24;
   document.getElementById('recentTopTitle').textContent =
@@ -610,6 +618,8 @@ function render(computed, days, N) {
   fillRecentTable(document.getElementById('recent1'), computed[1].events, cutoff25, recentCutoff);
   fillRecentTable(document.getElementById('recent2'), computed[2].events, cutoff25, recentCutoff);
   fillRecentTable(document.getElementById('recent3'), computed[3].events, cutoff25, recentCutoff);
+  fillRecentTable(document.getElementById('recent5'), computed[5].events, cutoff25, recentCutoff);
+  fillRecentTable(document.getElementById('recent7'), computed[7].events, cutoff25, recentCutoff);
   fillMonthlyRank(days);
 
   const durationSel = document.getElementById('durationSelect');
