@@ -440,6 +440,29 @@ function fmtRange(startDate, endDate) {
   return startDate === endDate ? endDate : `${startDate} → ${endDate}`;
 }
 
+function fmt(v) { return v !== null ? +v.toFixed(2) : null; }
+
+// Climatological mean / ±1σ / ±2σ band for each day in `recentDays`, looked
+// up from the day-of-year windowedStats() array (the same stats used to
+// classify hot/cold days) via that date's calendar position — resampled
+// onto actual calendar dates instead of stats.html's Jan1–Dec31 axis, so it
+// lines up with the real-date x-axis these two charts use.
+function recentClimatologyDatasets(recentDays, statsArr, rgb) {
+  const at = day => statsArr[DAY_INDEX[day.d.slice(5)]];
+  const means = recentDays.map(day => fmt(at(day).mean));
+  const u1 = recentDays.map(day => { const { mean, std } = at(day); return fmt(mean !== null ? mean + std : null); });
+  const l1 = recentDays.map(day => { const { mean, std } = at(day); return fmt(mean !== null ? mean - std : null); });
+  const u2 = recentDays.map(day => { const { mean, std } = at(day); return fmt(mean !== null ? mean + 2 * std : null); });
+  const l2 = recentDays.map(day => { const { mean, std } = at(day); return fmt(mean !== null ? mean - 2 * std : null); });
+  return [
+    { label: '±2σ', data: u2, borderColor: 'transparent', backgroundColor: `rgba(${rgb},0.10)`, fill: '+1', pointRadius: 0, tension: 0.15, order: 0 },
+    { label: '_l2', data: l2, borderColor: 'transparent', backgroundColor: 'transparent',        fill: false, pointRadius: 0, tension: 0.15, order: 0 },
+    { label: '±1σ', data: u1, borderColor: 'transparent', backgroundColor: `rgba(${rgb},0.18)`, fill: '+1', pointRadius: 0, tension: 0.15, order: 0 },
+    { label: '_l1', data: l1, borderColor: 'transparent', backgroundColor: 'transparent',        fill: false, pointRadius: 0, tension: 0.15, order: 0 },
+    { label: 'Normal', data: means, borderColor: `rgba(${rgb},0.6)`, backgroundColor: 'transparent', fill: false, pointRadius: 0, tension: 0.15, borderWidth: 1, borderDash: [3, 2], order: 0 },
+  ];
+}
+
 function fillRow(rowEl, texts, isHeader, classByIndex) {
   texts.forEach((text, i) => {
     const cell = isHeader ? document.createElement('th') : rowEl.insertCell();
@@ -556,7 +579,7 @@ function renderWindowParts(computed, N) {
 }
 
 function render(computed, days) {
-  const { hotRuns, coldRuns } = computed;
+  const { hotRuns, coldRuns, maxStats, minStats } = computed;
   const hotByLen = [...hotRuns].sort((a, b) => b.len - a.len);
   const coldByLen = [...coldRuns].sort((a, b) => b.len - a.len);
   const recentCutoff = new Date().getFullYear() - 4;
@@ -615,6 +638,7 @@ function render(computed, days) {
     data: {
       labels,
       datasets: [
+        ...recentClimatologyDatasets(recentDays, maxStats, '192,83,62'),
         { label: 'Max temp (°C)', data: maxSeries, borderColor: 'rgba(192,83,62,0.9)', backgroundColor: 'transparent', borderWidth: 1.3, pointRadius: 0, tension: 0.15, spanGaps: false, yAxisID: 'y', order: 2 },
         { label: 'Heat wave streak (days)', data: hotStreak, type: 'bar', backgroundColor: 'rgba(192,83,62,0.35)', yAxisID: 'y2', order: 3 },
       ]
@@ -623,6 +647,7 @@ function render(computed, days) {
       responsive: true,
       animation: false,
       interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { filter: item => !item.text.startsWith('_') } } },
       scales: {
         x: { ticks: xTicks },
         y:  { position: 'left',  title: { display: true, text: '°C' } },
@@ -637,6 +662,7 @@ function render(computed, days) {
     data: {
       labels,
       datasets: [
+        ...recentClimatologyDatasets(recentDays, minStats, '47,111,143'),
         { label: 'Min temp (°C)', data: minSeries, borderColor: 'rgba(47,111,143,0.9)', backgroundColor: 'transparent', borderWidth: 1.3, pointRadius: 0, tension: 0.15, spanGaps: false, yAxisID: 'y', order: 2 },
         { label: 'Cold snap streak (days)', data: coldStreak, type: 'bar', backgroundColor: 'rgba(47,111,143,0.35)', yAxisID: 'y2', order: 3 },
       ]
@@ -645,6 +671,7 @@ function render(computed, days) {
       responsive: true,
       animation: false,
       interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { filter: item => !item.text.startsWith('_') } } },
       scales: {
         x: { ticks: xTicks },
         y:  { position: 'left',  title: { display: true, text: '°C' } },
@@ -889,6 +916,7 @@ function fillMonthlyMeanRank(days, monthlyMeans) {
     coldRuns: buildRuns(days, d => d.cold),
     validMax: validDaysByYear(days, 'max'),
     validMin: validDaysByYear(days, 'min'),
+    maxStats, minStats,
     windows: {},
   };
   for (const N of DURATIONS) {
