@@ -243,6 +243,7 @@
     "startYear": 1925,
     "lat": 49.3,
     "lon": -123.12,
+    "fillFrom": [833],
     "segments": [
       { "id": 888 }
     ]
@@ -263,6 +264,7 @@
     "startYear": 1962,
     "lat": 49.31,
     "lon": -123.12,
+    "fillFrom": [888],
     "segments": [
       { "id": 833 }
     ]
@@ -273,6 +275,7 @@
     "startYear": 1992,
     "lat": 49.35,
     "lon": -123.19,
+    "fillFrom": [888, 833],
     "segments": [
       { "id": 6833 }
     ]

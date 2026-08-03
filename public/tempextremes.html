@@ -152,7 +152,15 @@
         <button id="yearNext" class="secondary">&#8250;</button>
       </div>
     </div>
+    <div class="field">
+      <label for="fillGapsToggle">Gap-filling</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.9rem;font-family:inherit;font-weight:normal;text-transform:none;letter-spacing:normal;color:inherit;padding:6px 0;">
+        <input type="checkbox" id="fillGapsToggle" disabled>
+        Fill gaps from nearby stations
+      </label>
+    </div>
   </div>
+  <p class="chart-note" id="fillGapsNote" style="margin:-12px 0 20px"></p>
 
   <div class="status" id="status">Loading data…</div>
 
@@ -462,30 +470,88 @@ function fmtRange(startDate, endDate) {
 
 function fmt(v) { return v !== null ? +v.toFixed(2) : null; }
 
-// Chart.js plugin: shades the column behind each day where isMissing(index)
-// is true, so a data gap (which silently ends a heat-wave/cold-snap streak
-// the same way an ordinary day does) reads as a distinct region instead of
-// blending in. Draws directly on the canvas rather than as a dataset, since
-// a second bar dataset sharing the x-axis would get grouped side-by-side
-// with the streak bar instead of sitting behind everything full-width.
-function noDataBandPlugin(isMissing) {
+// Chart.js plugin: shades the column behind each day with the color
+// colorForIndex(index) returns (skipping days it returns a falsy value for),
+// so a data gap or a gap-filled-from-a-nearby-station day (either of which
+// silently ends a heat-wave/cold-snap streak the same way an ordinary day
+// does) reads as a distinct region instead of blending in. Draws directly
+// on the canvas rather than as a dataset, since a second bar dataset
+// sharing the x-axis would get grouped side-by-side with the streak bar
+// instead of sitting behind everything full-width.
+function dayBandPlugin(colorForIndex) {
   return {
-    id: 'noDataBand',
+    id: 'dayBand',
     beforeDatasetsDraw(chart) {
       const { ctx, chartArea, scales: { x } } = chart;
       const n = chart.data.labels.length;
       if (n < 2) return;
       const step = x.getPixelForValue(1) - x.getPixelForValue(0);
       ctx.save();
-      ctx.fillStyle = 'rgba(120,120,120,0.14)';
       for (let i = 0; i < n; i++) {
-        if (!isMissing(i)) continue;
+        const color = colorForIndex(i);
+        if (!color) continue;
+        ctx.fillStyle = color;
         const cx = x.getPixelForValue(i);
         ctx.fillRect(cx - step / 2, chartArea.top, step, chartArea.bottom - chartArea.top);
       }
       ctx.restore();
     },
   };
+}
+
+// Fetches each of cfg.fillFrom's raw station CSVs across the same date range
+// as `days`, then returns a copy of `days` where a null max/min is replaced
+// by the first fallback station (in fillFrom order) that has a real value
+// for that exact date -- values that already exist are never touched, and
+// mean is recomputed only when both max and min end up real. Filled days
+// are tagged with filledVars ({max: id, min: id}, only the variables that
+// were actually filled) so the hot and cold charts can each show which of
+// their own figures didn't come from the primary station. Returns the
+// original array unchanged if cfg has no fillFrom.
+async function fillGapsFromNearby(days, cfg) {
+  const fallbackIds = cfg.fillFrom || [];
+  if (!fallbackIds.length || !days.length) return { days, filledCount: 0, bySource: {} };
+
+  const startYear = parseInt(days[0].d.slice(0, 4));
+  const endYear = parseInt(days[days.length - 1].d.slice(0, 4));
+  const years = Array.from({length: endYear - startYear + 1}, (_, i) => startYear + i);
+
+  const sourceRows = {};
+  for (const id of fallbackIds) {
+    const texts = await Promise.all(years.map(year =>
+      fetch(`data/weather-${id}-${year}.csv`).then(r => r.ok ? r.text() : null).catch(() => null)
+    ));
+    const byDate = new Map();
+    for (const text of texts) {
+      if (!text) continue;
+      for (const row of parseCSV(text)) byDate.set(row.date, row);
+    }
+    sourceRows[id] = byDate;
+  }
+
+  const bySource = {};
+  let filledCount = 0;
+  const filled = days.map(day => {
+    if (day.max !== null && day.min !== null) return day;
+    for (const id of fallbackIds) {
+      const src = sourceRows[id].get(day.d);
+      if (!src) continue;
+      const patch = {};
+      const filledVars = { ...day.filledVars };
+      if (day.max === null && src.max !== null) { patch.max = src.max; filledVars.max = id; }
+      if (day.min === null && src.min !== null) { patch.min = src.min; filledVars.min = id; }
+      if (patch.max === undefined && patch.min === undefined) continue;
+      const newMax = patch.max !== undefined ? patch.max : day.max;
+      const newMin = patch.min !== undefined ? patch.min : day.min;
+      if (newMax !== null && newMin !== null) patch.mean = (newMax + newMin) / 2;
+      filledCount++;
+      bySource[id] = (bySource[id] || 0) + 1;
+      return { ...day, ...patch, filledVars };
+    }
+    return day;
+  });
+
+  return { days: filled, filledCount, bySource };
 }
 
 // Climatological mean / ±1σ / ±2σ band for each day in `recentDays`, looked
@@ -682,10 +748,12 @@ function render(computed, days) {
     `${periodLabel} · daily min temp and running cold-snap length`;
   document.getElementById('recentHotContext').textContent =
     (hotRecord ? `All-time longest heat wave: ${hotRecord.len} days (${fmtRange(hotRecord.startDate, hotRecord.endDate)}). ` : '') +
-    'Shaded columns are days with no max-temp data.';
+    'Grey columns are days with no max-temp data' +
+    (recentDays.some(d => d.filledVars?.max !== undefined) ? '; blue columns were filled in from a nearby station.' : '.');
   document.getElementById('recentColdContext').textContent =
     (coldRecord ? `All-time longest cold snap: ${coldRecord.len} days (${fmtRange(coldRecord.startDate, coldRecord.endDate)}). ` : '') +
-    'Shaded columns are days with no min-temp data.';
+    'Grey columns are days with no min-temp data' +
+    (recentDays.some(d => d.filledVars?.min !== undefined) ? '; blue columns were filled in from a nearby station.' : '.');
 
   if (recentHotChart) recentHotChart.destroy();
   recentHotChart = new Chart(document.getElementById('recentHotChart'), {
@@ -698,7 +766,8 @@ function render(computed, days) {
         { label: 'Heat wave streak (days)', data: hotStreak, type: 'bar', backgroundColor: 'rgba(192,83,62,0.35)', yAxisID: 'y2', order: 3 },
       ]
     },
-    plugins: [noDataBandPlugin(i => recentDays[i].max === null)],
+    plugins: [dayBandPlugin(i => recentDays[i].max === null ? 'rgba(120,120,120,0.14)'
+      : recentDays[i].filledVars?.max !== undefined ? 'rgba(59,130,190,0.16)' : null)],
     options: {
       responsive: true,
       animation: false,
@@ -723,7 +792,8 @@ function render(computed, days) {
         { label: 'Cold snap streak (days)', data: coldStreak, type: 'bar', backgroundColor: 'rgba(47,111,143,0.35)', yAxisID: 'y2', order: 3 },
       ]
     },
-    plugins: [noDataBandPlugin(i => recentDays[i].min === null)],
+    plugins: [dayBandPlugin(i => recentDays[i].min === null ? 'rgba(120,120,120,0.14)'
+      : recentDays[i].filledVars?.min !== undefined ? 'rgba(59,130,190,0.16)' : null)],
     options: {
       responsive: true,
       animation: false,
@@ -963,31 +1033,73 @@ function fillMonthlyMeanRank(days, monthlyMeans) {
   document.getElementById('startYear').textContent = cfg.startYear;
   document.getElementById('endYear').textContent = new Date().getFullYear();
 
-  let days = await loadAll(cfg);
-  const maxStats = windowedStats(days, 'max');
-  const minStats = windowedStats(days, 'min');
-  days = classifyDays(days, maxStats, minStats);
+  const rawDays = await loadAll(cfg);
 
-  const computed = {
-    hotRuns: buildRuns(days, d => d.hot),
-    coldRuns: buildRuns(days, d => d.cold),
-    validMax: validDaysByYear(days, 'max'),
-    validMin: validDaysByYear(days, 'min'),
-    maxStats, minStats,
-    windows: {},
-  };
-  for (const N of DURATIONS) {
-    const hotWindows = buildAvgWindows(days, N, 'max');
-    const coldWindows = buildAvgWindows(days, N, 'min');
-    computed.windows[N] = {
-      hotWindows, coldWindows,
-      hotEvents: dedupeExtreme(hotWindows, N, 'hot'),
-      coldEvents: dedupeExtreme(coldWindows, N, 'cold'),
+  function buildComputed(sourceDays) {
+    const maxStats = windowedStats(sourceDays, 'max');
+    const minStats = windowedStats(sourceDays, 'min');
+    const days = classifyDays(sourceDays, maxStats, minStats);
+    const computed = {
+      hotRuns: buildRuns(days, d => d.hot),
+      coldRuns: buildRuns(days, d => d.cold),
+      validMax: validDaysByYear(days, 'max'),
+      validMin: validDaysByYear(days, 'min'),
+      maxStats, minStats,
+      windows: {},
     };
+    for (const N of DURATIONS) {
+      const hotWindows = buildAvgWindows(days, N, 'max');
+      const coldWindows = buildAvgWindows(days, N, 'min');
+      computed.windows[N] = {
+        hotWindows, coldWindows,
+        hotEvents: dedupeExtreme(hotWindows, N, 'hot'),
+        coldEvents: dedupeExtreme(coldWindows, N, 'cold'),
+      };
+    }
+    return { computed, days };
   }
+
+  let { computed, days } = buildComputed(rawDays);
 
   const windowSel = document.getElementById('durationSelect');
   windowSel.addEventListener('change', () => renderWindowParts(computed, parseInt(windowSel.value)));
+
+  // Gap-filling toggle: only enabled where stations.json curates a
+  // fillFrom list of nearby stations for this location. Off by default —
+  // fetches and merges fallback station data only when switched on, then
+  // fully rebuilds computed (climatology, hot/cold classification, runs,
+  // windows) from the merged days, since a filled-in day can change
+  // streaks, rankings, and records exactly as if it were the primary
+  // station's own reading.
+  const fillToggle = document.getElementById('fillGapsToggle');
+  const fillNote = document.getElementById('fillGapsNote');
+  if (cfg.fillFrom && cfg.fillFrom.length && !cfg.virtual) {
+    fillToggle.disabled = false;
+    fillNote.textContent =
+      `Nearby stations available to fill gaps: ${cfg.fillFrom.join(', ')}.`;
+    fillToggle.addEventListener('change', async () => {
+      fillToggle.disabled = true;
+      let sourceDays = rawDays;
+      if (fillToggle.checked) {
+        document.getElementById('status').textContent = 'Loading nearby-station data…';
+        const result = await fillGapsFromNearby(rawDays, cfg);
+        sourceDays = result.days;
+        const bySourceText = Object.entries(result.bySource)
+          .map(([id, n]) => `${n} from station ${id}`).join(', ');
+        fillNote.textContent = result.filledCount
+          ? `Gap-filling ON: ${result.filledCount} day(s) filled (${bySourceText}). Filled days may appear in the charts and rankings below — look for the blue shading.`
+          : 'Gap-filling ON: no gaps found to fill.';
+      } else {
+        fillNote.textContent = `Nearby stations available to fill gaps: ${cfg.fillFrom.join(', ')}.`;
+      }
+      ({ computed, days } = buildComputed(sourceDays));
+      render(computed, days);
+      renderWindowParts(computed, parseInt(windowSel.value));
+      fillToggle.disabled = false;
+    });
+  } else {
+    fillNote.textContent = 'No nearby stations curated for gap-filling at this location.';
+  }
 
   // Year controls for the past-12-months charts: null = rolling past-12-months
   // (the default), otherwise a specific calendar year (Jan 1 – Dec 31).
