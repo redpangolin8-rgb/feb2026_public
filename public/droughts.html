@@ -152,6 +152,13 @@
         Fill gaps from nearby stations
       </label>
     </div>
+    <div class="field">
+      <label for="bridgeGapsToggle">Streak gaps</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.9rem;font-family:inherit;font-weight:normal;text-transform:none;letter-spacing:normal;color:inherit;padding:6px 0;">
+        <input type="checkbox" id="bridgeGapsToggle">
+        Don't break a streak for a 1-2 day data gap
+      </label>
+    </div>
   </div>
   <p class="chart-note" id="fillGapsNote" style="margin:-12px 0 20px"></p>
 
@@ -227,6 +234,7 @@
 <script>
 let recentChart = null, spellAmaxChart = null, driestAmaxChart = null, seasonalChart = null;
 let selectedYear = null;  // null = rolling past-12-months; otherwise a calendar year
+let bridgeGapDays = 0;    // 0 = strict (today's behavior); >0 bridges short data gaps in streaks
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DRY_THRESHOLD = 1.0;   // mm — ETCCDI "dry day"
@@ -281,39 +289,47 @@ async function loadAll(cfg) {
   return days;
 }
 
-// Maximal runs of consecutive dry days. Missing values and date gaps end a run
-// — old-record gaps can shorten spells but never fabricate them.
-function buildDryRuns(days) {
+// Maximal runs of consecutive dry days. A wet day (real data, at or above
+// DRY_THRESHOLD) always ends a run. A data gap only ends it once more than
+// maxGapDays of it have elapsed since the last dry day -- up to that point
+// it's bridged: left open, but the gap days themselves are never counted
+// toward len or used as startDate/endDate, since we're not asserting the
+// unknown days were dry, only declining to treat their absence as proof
+// the spell broke. maxGapDays defaults to 0 (today's strict behavior: any
+// gap ends the run immediately).
+function buildDryRuns(days, maxGapDays = 0) {
   const runs = [];
-  let runStart = -1;
-  let prevT = null;
+  let runStart = -1, lastGoodIdx = -1, len = 0;
 
-  function close(endIdx, ongoing) {
+  function close(ongoing) {
     if (runStart === -1) return;
     runs.push({
-      len: endIdx - runStart + 1,
+      len,
       startDate: days[runStart].d,
-      endDate: days[endIdx].d,
+      endDate: days[lastGoodIdx].d,
       tStart: days[runStart].t,
-      tEnd: days[endIdx].t,
-      year: parseInt(days[endIdx].d.slice(0, 4)),
+      tEnd: days[lastGoodIdx].t,
+      year: parseInt(days[lastGoodIdx].d.slice(0, 4)),
       ongoing: !!ongoing,
     });
-    runStart = -1;
+    runStart = -1; lastGoodIdx = -1; len = 0;
   }
 
   for (let i = 0; i < days.length; i++) {
     const day = days[i];
-    if (prevT !== null && day.t !== prevT + 1) close(i - 1, false);  // date gap
-    const dry = day.v !== null && day.v < DRY_THRESHOLD;
+    if (runStart !== -1 && day.t - days[lastGoodIdx].t - 1 > maxGapDays) close(false);
+    const missing = day.v === null;
+    const dry = !missing && day.v < DRY_THRESHOLD;
     if (dry) {
       if (runStart === -1) runStart = i;
-    } else {
-      close(i - 1, false);
+      lastGoodIdx = i;
+      len++;
+    } else if (!missing) {
+      close(false);
     }
-    prevT = day.t;
+    // else: a bridgeable gap day -- leave the run open, don't count it.
   }
-  close(days.length - 1, true);  // a run reaching the last observation is "ongoing"
+  close(true);  // a run reaching the last observation is "ongoing"
   return runs;
 }
 
@@ -789,7 +805,7 @@ function render(computed, days) {
 
   function buildComputed(days) {
     const validByYear = validDaysByYear(days);
-    const computed = { runs: buildDryRuns(days), windows: {} };
+    const computed = { runs: buildDryRuns(days, bridgeGapDays), windows: {} };
     for (const N of WINDOWS) {
       const windows = buildWindows(days, N);
       const driest = dedupeDriest(windows, N);
@@ -807,6 +823,13 @@ function render(computed, days) {
 
   const windowSel = document.getElementById('windowSelect');
   windowSel.addEventListener('change', () => renderWindowParts(computed, parseInt(windowSel.value)));
+
+  function rebuildAndRender() {
+    computed = buildComputed(days);
+    render(computed, days);
+    renderWindowParts(computed, parseInt(windowSel.value));
+    fillMonthlyRank(days);
+  }
 
   // Gap-filling toggle: only enabled where stations.json curates a
   // fillFrom list of nearby stations for this location. Off by default —
@@ -835,15 +858,25 @@ function render(computed, days) {
         days = rawDays;
         fillNote.textContent = `Nearby stations available to fill gaps: ${cfg.fillFrom.join(', ')}.`;
       }
-      computed = buildComputed(days);
-      render(computed, days);
-      renderWindowParts(computed, parseInt(windowSel.value));
-      fillMonthlyRank(days);
+      rebuildAndRender();
       fillToggle.disabled = false;
     });
   } else {
     fillNote.textContent = 'No nearby stations curated for gap-filling at this location.';
   }
+
+  // Streak-gap-bridging toggle: off by default (0 = today's strict
+  // behavior, any gap ends a streak). When on, up to 2 consecutive days of
+  // missing precip data no longer end a dry spell -- those days just
+  // aren't counted, on the theory that a short instrument gap mid-spell
+  // probably didn't coincide with the dry spell itself breaking. A real
+  // wet day (actual data, at or above the dry threshold) always still
+  // ends the spell regardless of this setting.
+  const bridgeToggle = document.getElementById('bridgeGapsToggle');
+  bridgeToggle.addEventListener('change', () => {
+    bridgeGapDays = bridgeToggle.checked ? 2 : 0;
+    rebuildAndRender();
+  });
 
   // Year controls for the past-12-months chart: null = rolling past-12-months
   // (the default), otherwise a specific calendar year (Jan 1 – Dec 31).

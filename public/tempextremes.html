@@ -159,6 +159,13 @@
         Fill gaps from nearby stations
       </label>
     </div>
+    <div class="field">
+      <label for="bridgeGapsToggle">Streak gaps</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.9rem;font-family:inherit;font-weight:normal;text-transform:none;letter-spacing:normal;color:inherit;padding:6px 0;">
+        <input type="checkbox" id="bridgeGapsToggle">
+        Don't break a streak for a 1-2 day data gap
+      </label>
+    </div>
   </div>
   <p class="chart-note" id="fillGapsNote" style="margin:-12px 0 20px"></p>
 
@@ -267,6 +274,7 @@
 <script>
 let recentHotChart = null, recentColdChart = null, amaxChart = null, spellAmaxChart = null;
 let selectedYear = null;  // null = rolling past-12-months; otherwise a calendar year
+let bridgeGapDays = 0;    // 0 = strict (today's behavior); >0 bridges short data gaps in streaks
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTH_DAYS  = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -392,29 +400,41 @@ function classifyDays(days, maxStats, minStats) {
   });
 }
 
-// Maximal runs of consecutive days where isMember(day) is true. A missing
-// value, a false classification, or a date gap all end a run.
-function buildRuns(days, isMember) {
+// Maximal runs of days where isMember(day) is true. A day with real data
+// that fails isMember always ends the run. A data gap (isMissing true, or
+// an entirely absent calendar day) only ends the run once more than
+// maxGapDays of it have elapsed since the last qualifying day -- up to
+// that point it's bridged: left open, but the gap days themselves are
+// never counted toward len or used as startDate/endDate, since we're not
+// asserting the unknown days were hot/cold, only declining to treat their
+// absence as proof the streak broke. maxGapDays defaults to 0 (today's
+// strict behavior: any gap ends the run immediately).
+function buildRuns(days, isMember, isMissing, maxGapDays = 0) {
   const runs = [];
-  let runStart = -1, prevT = null;
-  function close(endIdx, ongoing) {
+  let runStart = -1, lastGoodIdx = -1, len = 0;
+  function close(ongoing) {
     if (runStart === -1) return;
     runs.push({
-      len: endIdx - runStart + 1,
-      startDate: days[runStart].d, endDate: days[endIdx].d,
-      tStart: days[runStart].t, tEnd: days[endIdx].t,
-      year: parseInt(days[endIdx].d.slice(0, 4)), ongoing: !!ongoing,
+      len,
+      startDate: days[runStart].d, endDate: days[lastGoodIdx].d,
+      tStart: days[runStart].t, tEnd: days[lastGoodIdx].t,
+      year: parseInt(days[lastGoodIdx].d.slice(0, 4)), ongoing: !!ongoing,
     });
-    runStart = -1;
+    runStart = -1; lastGoodIdx = -1; len = 0;
   }
   for (let i = 0; i < days.length; i++) {
     const day = days[i];
-    if (prevT !== null && day.t !== prevT + 1) close(i - 1, false);
-    if (isMember(day)) { if (runStart === -1) runStart = i; }
-    else close(i - 1, false);
-    prevT = day.t;
+    if (runStart !== -1 && day.t - days[lastGoodIdx].t - 1 > maxGapDays) close(false);
+    if (isMember(day)) {
+      if (runStart === -1) runStart = i;
+      lastGoodIdx = i;
+      len++;
+    } else if (!isMissing(day)) {
+      close(false);
+    }
+    // else: a bridgeable gap day -- leave the run open, don't count it.
   }
-  close(days.length - 1, true);
+  close(true);
   return runs;
 }
 
@@ -1040,8 +1060,8 @@ function fillMonthlyMeanRank(days, monthlyMeans) {
     const minStats = windowedStats(sourceDays, 'min');
     const days = classifyDays(sourceDays, maxStats, minStats);
     const computed = {
-      hotRuns: buildRuns(days, d => d.hot),
-      coldRuns: buildRuns(days, d => d.cold),
+      hotRuns: buildRuns(days, d => d.hot, d => d.max === null, bridgeGapDays),
+      coldRuns: buildRuns(days, d => d.cold, d => d.min === null, bridgeGapDays),
       validMax: validDaysByYear(days, 'max'),
       validMin: validDaysByYear(days, 'min'),
       maxStats, minStats,
@@ -1071,6 +1091,13 @@ function fillMonthlyMeanRank(days, monthlyMeans) {
   // windows) from the merged days, since a filled-in day can change
   // streaks, rankings, and records exactly as if it were the primary
   // station's own reading.
+  let currentSourceDays = rawDays;
+  function rebuildAndRender() {
+    ({ computed, days } = buildComputed(currentSourceDays));
+    render(computed, days);
+    renderWindowParts(computed, parseInt(windowSel.value));
+  }
+
   const fillToggle = document.getElementById('fillGapsToggle');
   const fillNote = document.getElementById('fillGapsNote');
   if (cfg.fillFrom && cfg.fillFrom.length && !cfg.virtual) {
@@ -1079,11 +1106,11 @@ function fillMonthlyMeanRank(days, monthlyMeans) {
       `Nearby stations available to fill gaps: ${cfg.fillFrom.join(', ')}.`;
     fillToggle.addEventListener('change', async () => {
       fillToggle.disabled = true;
-      let sourceDays = rawDays;
+      currentSourceDays = rawDays;
       if (fillToggle.checked) {
         document.getElementById('status').textContent = 'Loading nearby-station data…';
         const result = await fillGapsFromNearby(rawDays, cfg);
-        sourceDays = result.days;
+        currentSourceDays = result.days;
         const bySourceText = Object.entries(result.bySource)
           .map(([id, n]) => `${n} from station ${id}`).join(', ');
         fillNote.textContent = result.filledCount
@@ -1092,14 +1119,25 @@ function fillMonthlyMeanRank(days, monthlyMeans) {
       } else {
         fillNote.textContent = `Nearby stations available to fill gaps: ${cfg.fillFrom.join(', ')}.`;
       }
-      ({ computed, days } = buildComputed(sourceDays));
-      render(computed, days);
-      renderWindowParts(computed, parseInt(windowSel.value));
+      rebuildAndRender();
       fillToggle.disabled = false;
     });
   } else {
     fillNote.textContent = 'No nearby stations curated for gap-filling at this location.';
   }
+
+  // Streak-gap-bridging toggle: off by default (0 = today's strict
+  // behavior, any gap ends a streak). When on, up to 2 consecutive days of
+  // missing max/min data no longer end a heat-wave/cold-snap streak --
+  // those days just aren't counted, on the theory that a short instrument
+  // gap mid-heatwave probably didn't coincide with the pattern itself
+  // breaking. A real non-qualifying day (actual data, just not hot/cold
+  // enough) always still ends the streak regardless of this setting.
+  const bridgeToggle = document.getElementById('bridgeGapsToggle');
+  bridgeToggle.addEventListener('change', () => {
+    bridgeGapDays = bridgeToggle.checked ? 2 : 0;
+    rebuildAndRender();
+  });
 
   // Year controls for the past-12-months charts: null = rolling past-12-months
   // (the default), otherwise a specific calendar year (Jan 1 – Dec 31).
