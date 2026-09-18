@@ -171,6 +171,11 @@ const PERIODS = {
 MONTH_NAMES.forEach((name, m) => {
   PERIODS['m' + m] = { label: name, noun: name, months: [[0, m]] };
 });
+// Trailing N-week windows ending on the latest observation (this year) or
+// the same calendar day-of-year (past years) -- unlike the periods above,
+// these aren't built from monthly aggregates (see weeksPeriodSeries).
+PERIODS.last4wk = { label: 'Last 4 weeks', noun: 'last 4 weeks', weeks: 4 };
+PERIODS.last8wk = { label: 'Last 8 weeks', noun: 'last 8 weeks', weeks: 8 };
 
 const VARS = {
   tmean:  { label: 'Mean temperature', unit: '°C', sum: false, decimals: 1, high: 'hottest', low: 'coldest', posColor: '192,83,62', negColor: '47,111,143' },
@@ -221,6 +226,7 @@ async function loadAll(cfg) {
   ));
 
   const acc = {};  // acc[year][month] = per-variable {sum, n}
+  const days = []; // chronological daily rows, for the trailing-weeks periods
   let loaded = 0;
   for (const text of texts) {
     if (!text) continue;
@@ -235,8 +241,20 @@ async function loadAll(cfg) {
       if (row.max    !== null) { cell.tmax[0]   += row.max;    cell.tmax[1]++;   }
       if (row.min    !== null) { cell.tmin[0]   += row.min;    cell.tmin[1]++;   }
       if (row.precip !== null) { cell.precip[0] += row.precip; cell.precip[1]++; }
+      days.push({
+        d: row.date, t: Date.parse(row.date + 'T00:00:00Z') / 86400000,
+        mean: row.mean, max: row.max, min: row.min, precip: row.precip,
+      });
     }
   }
+  days.sort((a, b) => a.t - b.t);
+  // Trim trailing no-data days (ECCC's current-year file has date rows for
+  // months that haven't happened yet) so the trailing-weeks periods anchor
+  // to the actual last observation, not a blank future date.
+  let end = days.length - 1;
+  while (end >= 0 && days[end].mean === null && days[end].max === null &&
+         days[end].min === null && days[end].precip === null) end--;
+  days.length = end + 1;
 
   const monthly = { tmean: {}, tmax: {}, tmin: {}, precip: {} };
   for (const [y, months] of Object.entries(acc)) {
@@ -259,12 +277,16 @@ async function loadAll(cfg) {
   const loadedYears = Object.keys(acc).map(Number);
   const range = loadedYears.length ? ` (${Math.min(...loadedYears)}–${Math.max(...loadedYears)})` : '';
   document.getElementById('status').textContent = `Loaded ${loaded} years of data${range}${stationCompositionNote(cfg)}.`;
-  return { monthly, years };
+  return { monthly, years, days };
 }
 
-// { year: value } for one variable over one period, only complete periods
-function periodSeries(monthly, years, varKey, periodKey) {
+// { year: value } for one variable over one period, only complete periods.
+// Returns { series, ranges } -- ranges maps year -> {startDate, endDate}
+// and is only populated for the trailing-weeks periods, which (unlike the
+// calendar-month/season/year periods) don't have a self-explanatory label.
+function periodSeries(monthly, years, varKey, periodKey, days) {
   const per = PERIODS[periodKey];
+  if (per.weeks) return weeksPeriodSeries(days, varKey, per.weeks);
   const isSum = VARS[varKey].sum;
   const series = {};
   for (const year of years) {
@@ -280,7 +302,56 @@ function periodSeries(monthly, years, varKey, periodKey) {
       ? vals.reduce((a, b) => a + b, 0)
       : vals.reduce((a, b) => a + b, 0) / vals.length;
   }
-  return series;
+  return { series, ranges: {} };
+}
+
+const DAY_FIELD = { tmean: 'mean', tmax: 'max', tmin: 'min', precip: 'precip' };
+
+// Trailing N*7-day window ending on the latest observation (for the most
+// recent year) or the same calendar day-of-year in each earlier year --
+// built directly from daily data rather than the monthly aggregates, since
+// the window doesn't align to month boundaries. A year's window is only
+// included if it meets the same completeness bar (scaled to window length)
+// the monthly periods use, so a real data gap excludes that year rather
+// than silently understating it.
+function weeksPeriodSeries(days, varKey, weeks) {
+  const series = {}, ranges = {};
+  if (!days.length) return { series, ranges };
+
+  const windowDays = weeks * 7;
+  const isSum = VARS[varKey].sum;
+  const field = DAY_FIELD[varKey];
+  const minDays = Math.ceil((isSum ? PRECIP_MIN_DAYS : TEMP_MIN_DAYS) / 30 * windowDays);
+
+  const byT = new Map(days.map(d => [d.t, d]));
+  const last = days[days.length - 1];
+  const [ay, am, ad] = last.d.split('-').map(Number);
+  const startYear = parseInt(days[0].d.slice(0, 4));
+
+  for (let y = startYear; y <= ay; y++) {
+    const endT = Math.floor(Date.UTC(y, am - 1, ad) / 86400000);
+    if (endT > last.t) continue;  // this year hasn't reached the anchor date yet
+    const startT = endT - windowDays + 1;
+    let sum = 0, n = 0;
+    for (let t = startT; t <= endT; t++) {
+      const d = byT.get(t);
+      if (!d || d[field] === null) continue;
+      sum += d[field];
+      n++;
+    }
+    if (n < minDays) continue;
+    series[y] = isSum ? sum : sum / n;
+    ranges[y] = {
+      startDate: new Date(startT * 86400000).toISOString().slice(0, 10),
+      endDate: new Date(endT * 86400000).toISOString().slice(0, 10),
+    };
+  }
+  return { series, ranges };
+}
+
+function fmtShortRange(r) {
+  const fmt = ds => { const [y, m, d] = ds.split('-').map(Number); return `${MONTH_NAMES[m - 1]} ${d}`; };
+  return `${fmt(r.startDate)} – ${fmt(r.endDate)}, ${r.endDate.slice(0, 4)}`;
 }
 
 function ordinal(n) {
@@ -311,10 +382,10 @@ function fillRankTable(tableEl, ranked, unit, decimals, baseline, recentCutoff) 
   }
 }
 
-function render(monthly, years, varKey, periodKey) {
+function render(monthly, years, varKey, periodKey, days) {
   const varCfg = VARS[varKey];
   const per = PERIODS[periodKey];
-  const series = periodSeries(monthly, years, varKey, periodKey);
+  const { series, ranges } = periodSeries(monthly, years, varKey, periodKey, days);
   const seriesYears = Object.keys(series).map(Number).sort((a, b) => a - b);
 
   const headlineEl = document.getElementById('headline');
@@ -413,8 +484,10 @@ function render(monthly, years, varKey, periodKey) {
   const side = latestAnom >= 0
     ? `${ordinal(rankHigh)} ${varCfg.high}`
     : `${ordinal(rankLow)} ${varCfg.low}`;
-  const periodName = periodKey.startsWith('m') || periodKey === 'annual'
-    ? `${per.noun} ${latestYear}` : `${per.noun[0].toUpperCase()}${per.noun.slice(1)} ${latestYear}`;
+  const periodName = per.weeks
+    ? `The last ${per.weeks} weeks (${fmtShortRange(ranges[latestYear])})`
+    : (periodKey.startsWith('m') || periodKey === 'annual'
+        ? `${per.noun} ${latestYear}` : `${per.noun[0].toUpperCase()}${per.noun.slice(1)} ${latestYear}`);
   headlineEl.textContent =
     `${periodName} was the ${side} of ${seriesYears.length} on record — ` +
     `${latestValue.toFixed(varCfg.decimals)} ${varCfg.unit}, ` +
@@ -452,9 +525,9 @@ function render(monthly, years, varKey, periodKey) {
   }
   varSel.value = 'tmean';
 
-  const { monthly, years } = await loadAll(cfg);
+  const { monthly, years, days } = await loadAll(cfg);
 
-  const rerender = () => render(monthly, years, varSel.value, periodSel.value);
+  const rerender = () => render(monthly, years, varSel.value, periodSel.value, days);
   periodSel.addEventListener('change', rerender);
   varSel.addEventListener('change', rerender);
   rerender();
